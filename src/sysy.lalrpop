@@ -22,7 +22,26 @@ FuncType: FuncType = "int" => FuncType::Int;
 
 Block: Block = "{" <stmt: Stmt> "}" => Block { <> };
 
-Stmt: Stmt = "return" <num: IntConst> ";" => Stmt { <> };
+Stmt: Stmt = "return" <exp: Exp> ";" => Stmt { <> };
+
+Exp : Exp = <unary_exp: UnaryExp> => Exp { <> };
+
+PrimaryExp : PrimaryExp = {
+  "(" <exp: UnaryExp> ")" => PrimaryExp::Exp(Box::new(exp)),
+  <num: Number> => PrimaryExp::Number(num),
+}
+
+
+UnaryExp : UnaryExp = {
+  <primary_exp: PrimaryExp> => UnaryExp::Primary(Box::new(primary_exp)),
+  <unary_op: UnaryOp> <unary_exp: UnaryExp> => UnaryExp::Unary(unary_op, Box::new(unary_exp)),
+}
+
+UnaryOp : UnaryOp = {
+  "+" => UnaryOp::Add,
+  "-" => UnaryOp::Sub,
+  "!" => UnaryOp::Rev,
+}
 
 // 如果匹配到标识符, 就返回这个字符串
 // 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
@@ -30,7 +49,7 @@ Stmt: Stmt = "return" <num: IntConst> ";" => Stmt { <> };
 Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
 
 // 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
-IntConst: i32 = {
+Number: i32 = {
   r"[1-9][0-9]*" => i32::from_str_radix(<>, 10).unwrap(),
   r"0[0-7]*" => i32::from_str_radix(<>, 8).unwrap(),
   r"0[xX][0-9a-fA-F]+" => i32::from_str_radix(&<>[2..], 16).unwrap(),

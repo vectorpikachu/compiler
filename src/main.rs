@@ -6,6 +6,8 @@ pub mod generate_asm;
 use crate::generate_asm::GenerateAsm;
 
 pub mod ast;
+pub mod generate_ir;
+// use crate::generate_ir::*;
 
 // 引用 lalrpop 生成的解析器
 // 因为我们刚刚创建了 sysy.lalrpop, 所以模块名是 sysy
