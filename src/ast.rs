@@ -25,7 +25,8 @@ impl FuncDef {
         write!(buf, "fun @{}(): ", self.ident).unwrap();
         self.func_type.generate_koopa_ir(buf);
         writeln!(buf, "%entry:").unwrap();
-        writeln!(buf, "    ret 0").unwrap();
+        self.block.generate_koopa_ir(buf);
+        // writeln!(buf, "  ret 0").unwrap();
         writeln!(buf, "}}").unwrap();
     }
 }
@@ -45,12 +46,21 @@ impl FuncType {
 pub struct Block {
     pub stmt : Stmt,
 }
+impl Block {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>) {
+        self.stmt.generate_koopa_ir(buf);
+    }
+}
 
 #[derive(Debug)]
 pub struct Stmt {
     pub num : i32,
 }
-
+impl Stmt {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>) {
+        writeln!(buf, "  ret {}", self.num).unwrap();
+    }
+}
 
 #[derive(Debug)]
 pub struct IntConst(pub i32);

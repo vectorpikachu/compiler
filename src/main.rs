@@ -2,6 +2,8 @@ use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
 use std::io::Result;
+pub mod generate_asm;
+use crate::generate_asm::GenerateAsm;
 
 pub mod ast;
 
@@ -31,10 +33,24 @@ fn main() -> Result<()> {
 
     let koopa_ir = String::from_utf8(buf).unwrap();
 
-    // 输出解析得到的 AST
-    println!("{:#?}", ast);
-    println!("{}", koopa_ir);
-    //println!("{}", mode);
+    let driver = koopa::front::Driver::from(koopa_ir.clone());
+    let program = driver.generate_program().unwrap();
+
+    let mut buf: Vec<u8> = Vec::new();
+
+    program.generate_asm(&mut buf);
+
+    let asm = String::from_utf8(buf).unwrap();
+
+    if mode == "-koopa" {
+        // 将 Koopa IR 写入输出文件
+        std::fs::write(output, koopa_ir)?;
+    } else {
+        // 将汇编写入输出文件
+        std::fs::write(output, asm)?;
+    }
+
+
     //println!("{}", output);
     Ok(())
 }
