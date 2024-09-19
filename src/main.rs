@@ -34,20 +34,22 @@ fn main() -> Result<()> {
     ast.generate_koopa_ir(&mut buf);
 
     let koopa_ir = String::from_utf8(buf).unwrap();
-
-    let driver = koopa::front::Driver::from(koopa_ir.clone());
-    let program = driver.generate_program().unwrap();
-
-    let mut buf: Vec<u8> = Vec::new();
-
-    program.generate_asm(&mut buf);
-
-    let asm = String::from_utf8(buf).unwrap();
-
     if mode == "-koopa" {
         // 将 Koopa IR 写入输出文件
         std::fs::write(output, koopa_ir)?;
     } else {
+        let driver = koopa::front::Driver::from(koopa_ir.clone());
+        let program = driver.generate_program().unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+
+        let mut params = generate_asm::GenerateAsmParams {
+            register_count: 0,
+            register_data: Vec::new(),
+        };
+        program.generate_asm(&mut buf, &mut params);
+
+        let asm = String::from_utf8(buf).unwrap();
         // 将汇编写入输出文件
         std::fs::write(output, asm)?;
     }

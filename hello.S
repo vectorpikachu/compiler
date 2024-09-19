@@ -2,6 +2,6 @@
   .globl main
 main:
   li t0, 6
-  sub t3, x0, 
-  sub t5, x0, 
+  sub t1, x0, t0
+  sub t2, x0, t1
   ret
