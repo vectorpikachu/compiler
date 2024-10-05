@@ -14,3 +14,5 @@ sysy.lalrpop 放着词法分析的.
 ```shell
 cargo run -- -koopa hello.c -o hello.koopa
 ```
+
+现在加入gitlab.
