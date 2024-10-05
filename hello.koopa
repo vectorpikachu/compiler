@@ -1,7 +1,4 @@
-  .text
-  .globl main
-main:
-  li t0, 6
-  sub t3, x0, 
-  sub t5, x0, 
-  ret
+fun @main(): i32 {
+%entry:
+  ret 101
+}

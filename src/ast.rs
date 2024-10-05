@@ -15,6 +15,7 @@ pub struct FuncDef {
 #[derive(Debug)]
 pub enum FuncType {
     Int,
+    Void,
 }
 
 

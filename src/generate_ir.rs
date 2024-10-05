@@ -22,7 +22,6 @@ impl FuncDef {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
         write!(buf, "fun @{}(): ", self.ident).unwrap();
         self.func_type.generate_koopa_ir(buf);
-        writeln!(buf, "%entry:").unwrap();
         params.first_num = 0;
         // 当前块要计算出最里面的数字.
         self.block.generate_koopa_ir(buf, params);
@@ -39,6 +38,7 @@ impl FuncType {
 
 impl Block {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        writeln!(buf, "%entry:").unwrap();
         self.stmt.generate_koopa_ir(buf, params);
     }
 }
@@ -47,7 +47,7 @@ impl Stmt {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
         self.exp.generate_koopa_ir(buf, params);
         if params.var_count == 0 {
-            // 直接树数字， 没有用过变量.
+            // 直接是数字， 没有用过变量.
             writeln!(buf, "  ret {}", params.first_num).unwrap();
         } else {
             writeln!(buf, "  ret %{}", params.var_count - 1).unwrap();

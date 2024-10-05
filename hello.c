@@ -3,5 +3,5 @@ int main() {
   /* 
   测试多行注释
    */
-  return + (- - !6);
+  return 101;
 }
