@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{stderr, Write};
 use crate::ast::*;
 
 pub struct GenerateIRParams {
@@ -20,19 +20,29 @@ impl CompUnit {
 
 impl FuncDef {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        if self.ident != "main" {
+            stderr().write_all(b"Error: only support main function\n").unwrap();
+            return;
+        }
         write!(buf, "fun @{}(): ", self.ident).unwrap();
         self.func_type.generate_koopa_ir(buf);
         params.first_num = 0;
         // 当前块要计算出最里面的数字.
         self.block.generate_koopa_ir(buf, params);
-        // writeln!(buf, "  ret 0").unwrap();
         writeln!(buf, "}}").unwrap();
     }
 }
 
 impl FuncType {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>) {
-        writeln!(buf, "i32 {{").unwrap();
+        match self {
+            FuncType::Void => {
+                writeln!(buf, "void {{").unwrap();
+            }
+            FuncType::Int => {
+                writeln!(buf, "i32 {{").unwrap();
+            }
+        }
     }
 }
 
