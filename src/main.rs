@@ -28,6 +28,8 @@ fn main() -> Result<()> {
     // 调用 lalrpop 生成的 parser 解析输入文件
     let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
 
+    // println!("{:#?}", ast);
+
     // 我们把生成的Koopa IR放到缓冲区里
     let mut buf: Vec<u8> = Vec::new();
 

@@ -37,7 +37,7 @@ impl GenerateAsm for koopa::ir::FunctionData {
         writeln!(buf, "{}:", self.name().replace("@", "")).unwrap();
         // ...
         // 访问基本块
-        for (&bb, node) in self.layout().bbs() {
+        for (&_bb, node) in self.layout().bbs() {
             // 访问指令列表
             for &inst in node.insts().keys() {
                 let value_data = self.dfg().value(inst);

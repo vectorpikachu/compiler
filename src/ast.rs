@@ -54,11 +54,13 @@ pub enum UnaryExp {
 #[derive(Debug)]
 pub enum PrimaryExp {
     Exp(Box<UnaryExp>),
-    Number(i32),
+    Number(Number),
 }
 
 #[derive(Debug)]
-pub struct Number(pub i32);
+pub enum Number {
+    IntConst(i32),
+}
 
 
 #[derive(Debug)]

@@ -113,7 +113,11 @@ impl PrimaryExp {
                 unary_exp.generate_koopa_ir(buf, params);
             }
             PrimaryExp::Number(num) => {
-                params.first_num = *num;
+                match num {
+                    Number::IntConst(num) => {
+                        params.first_num = *num;
+                    }
+                }
             }
         }
     }

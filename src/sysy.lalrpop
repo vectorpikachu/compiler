@@ -6,7 +6,7 @@ grammar;
 match {
     r"\s*" => {}, // 空白符
     r"//[^\n\r]*[\n\r]*" => {}, // 注释
-    r"\/\*([^*]|\*+[^\/])*\*\/" => {}, // 多行注释
+    r"\/\*([^\*]|\*+[^\/\*])*\*+\/" => {}, // 多行注释
     _ // 剩下的情况
 }
 
@@ -48,8 +48,10 @@ UnaryOp : UnaryOp = {
 // 关于尖括号到底代表什么, 请 RTFM
 Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
 
+Number: Number = <int_const: INT_CONST> => Number::IntConst(int_const);
+
 // 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
-Number: i32 = {
+INT_CONST: i32 = {
   r"[1-9][0-9]*" => i32::from_str_radix(<>, 10).unwrap(),
   r"0[0-7]*" => i32::from_str_radix(<>, 8).unwrap(),
   r"0[xX][0-9a-fA-F]+" => i32::from_str_radix(&<>[2..], 16).unwrap(),
