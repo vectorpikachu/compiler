@@ -1,3 +1,3 @@
 int main() {
-  return 5 || 2 && 4;
+  return 5 || 2 && 4 || 5;
 }
