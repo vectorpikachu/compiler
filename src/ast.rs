@@ -1,4 +1,5 @@
 
+
 #[derive(Debug)]
 pub struct CompUnit {
     pub func_def : FuncDef,
@@ -33,7 +34,7 @@ pub struct Stmt {
 
 #[derive(Debug)]
 pub struct Exp {
-    pub unary_exp : UnaryExp,
+    pub l_or_exp : LOrExp,
 }
 
 
@@ -47,14 +48,40 @@ pub enum UnaryOp {
 
 #[derive(Debug)]
 pub enum UnaryExp {
-    Unary(UnaryOp, Box<UnaryExp>),
-    Primary(Box<PrimaryExp>),
+    UnaryExp(UnaryOp, Box<UnaryExp>),
+    PrimaryExp(Box<PrimaryExp>),
 }
 
 #[derive(Debug)]
 pub enum PrimaryExp {
-    Exp(Box<UnaryExp>),
+    Exp(Box<Exp>),
     Number(Number),
+}
+
+#[derive(Debug)]
+pub enum MulOp {
+    Mul,
+    Div,
+    Mod,
+}
+
+#[derive(Debug)]
+pub enum MulExp {
+    UnaryExp(UnaryExp),
+    MulExp(Box<MulExp>, MulOp, UnaryExp),
+}
+
+#[derive(Debug)]
+pub enum AddOp {
+    Add,
+    Sub,
+}
+
+
+#[derive(Debug)]
+pub enum AddExp {
+    MulExp(MulExp),
+    AddExp(Box<AddExp>, AddOp, MulExp),
 }
 
 #[derive(Debug)]
@@ -65,3 +92,51 @@ pub enum Number {
 
 #[derive(Debug)]
 pub struct IntConst(pub i32);
+
+#[derive(Debug)]
+pub enum RelOp {
+    Lt,
+    Gt,
+    Le,
+    Ge,
+}
+
+#[derive(Debug)]
+pub enum EqOp {
+    Eq,
+    Ne,
+}
+
+#[derive(Debug)]
+pub enum LAndOp {
+    And,
+}
+
+#[derive(Debug)]
+pub enum LOrOp {
+    Or,
+}
+
+#[derive(Debug)]
+pub enum RelExp {
+    AddExp(AddExp),
+    RelExp(Box<RelExp>, RelOp, AddExp),
+}
+
+#[derive(Debug)]
+pub enum EqExp {
+    RelExp(RelExp),
+    EqExp(Box<EqExp>, EqOp, RelExp),
+}
+
+#[derive(Debug)]
+pub enum LAndExp {
+    EqExp(EqExp),
+    LAndExp(Box<LAndExp>, LAndOp, EqExp),
+}
+
+#[derive(Debug)]
+pub enum LOrExp {
+    LAndExp(LAndExp),
+    LOrExp(Box<LOrExp>, LOrOp, LAndExp),
+}

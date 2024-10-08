@@ -16,3 +16,8 @@ cargo run -- -koopa hello.c -o hello.koopa
 ```
 
 现在加入gitlab.
+
+```shell
+autotest -koopa -s lv3 /root/compiler
+```
+
