@@ -21,3 +21,10 @@ cargo run -- -koopa hello.c -o hello.koopa
 autotest -koopa -s lv3 /root/compiler
 ```
 
+如果放的是%n, 实际上是一个Value, 否则可以在dfg中找到.
+
+```
+docker run -it --rm -v 项目目录:/root/compiler maxxing/compiler-dev \
+  autotest -riscv -s lv3 /root/compiler
+```
+
