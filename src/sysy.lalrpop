@@ -27,7 +27,12 @@ FuncDef: FuncDef = {
 
 FuncType: FuncType = "int" => FuncType::Int;
 
-Block: Block = "{" <stmt: Stmt> "}" => Block { <> };
+Block: Block = "{" <block_items: (<BlockItem>)*> "}" => Block { <> };
+
+BlockItem: BlockItem = {
+  <stmt: Stmt> => BlockItem::Stmt(stmt),
+  <decl: Decl> => BlockItem::Decl(decl),
+}
 
 Stmt: Stmt = "return" <exp: Exp> ";" => Stmt { <> };
 
@@ -35,6 +40,7 @@ Exp : Exp = <l_or_exp: LOrExp> => Exp { <> };
 
 PrimaryExp : PrimaryExp = {
   "(" <exp: Exp> ")" => PrimaryExp::Exp(Box::new(exp)),
+  <l_val: LVal> => PrimaryExp::LVal(l_val),
   <num: Number> => PrimaryExp::Number(num),
 }
 
@@ -119,6 +125,25 @@ LOrExp : LOrExp = {
 Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
 
 Number: Number = <int_const: INT_CONST> => Number::IntConst(int_const);
+
+Decl: Decl = <const_decl: ConstDecl> => Decl { <> };
+
+ConstDecl: ConstDecl = "const" <btype: BType> <const_def_head: ConstDef> 
+  <const_def_tail: ("," <ConstDef>)*> ";" => ConstDecl {
+    btype, 
+    const_defs: vec![const_def_head].into_iter().chain(const_def_tail).collect(),
+  };
+
+BType: BType = "int" => BType::Int;
+
+ConstDef: ConstDef = <ident: Ident> "=" <const_init_val: ConstInitVal> => 
+  ConstDef { <> };
+
+ConstInitVal: ConstInitVal = <const_exp: ConstExp> => ConstInitVal { <> };
+
+LVal: LVal = <ident: Ident> => LVal { <> };
+
+ConstExp: ConstExp = <exp: Exp> => ConstExp { <> };
 
 // 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
 INT_CONST: i32 = {

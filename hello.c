@@ -1,3 +1,5 @@
 int main() {
-  return 5 + 5 - 5 == 6 && 7 || 8 && !0 && 7 != 8 || 7 <= 8;
+  const int x = 5, y = 6;
+  const int z = 6;
+  return 7;
 }

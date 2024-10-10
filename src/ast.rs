@@ -22,7 +22,13 @@ pub enum FuncType {
 
 #[derive(Debug)]
 pub struct Block {
-    pub stmt : Stmt,
+    pub block_items: Vec<BlockItem>,
+}
+
+#[derive(Debug)]
+pub enum BlockItem {
+    Decl(Decl),
+    Stmt(Stmt),
 }
 
 
@@ -55,6 +61,7 @@ pub enum UnaryExp {
 #[derive(Debug)]
 pub enum PrimaryExp {
     Exp(Box<Exp>),
+    LVal(LVal),
     Number(Number),
 }
 
@@ -139,4 +146,41 @@ pub enum LAndExp {
 pub enum LOrExp {
     LAndExp(LAndExp),
     LOrExp(Box<LOrExp>, LOrOp, LAndExp),
+}
+
+#[derive(Debug)]
+pub struct Decl {
+    pub const_decl: ConstDecl,
+}
+
+#[derive(Debug)]
+pub struct  ConstDecl {
+    pub btype: BType,
+    pub const_defs: Vec<ConstDef>,
+}
+
+#[derive(Debug)]
+pub enum BType {
+    Int,
+}
+
+#[derive(Debug)]
+pub struct ConstDef {
+    pub ident: String,
+    pub const_init_val: ConstInitVal,
+}
+
+#[derive(Debug)]
+pub struct ConstInitVal {
+    pub const_exp: ConstExp,
+}
+
+#[derive(Debug)]
+pub struct LVal {
+    pub ident: String,
+}
+
+#[derive(Debug)]
+pub struct ConstExp {
+    pub exp: Exp,
 }

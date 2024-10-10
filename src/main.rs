@@ -40,7 +40,7 @@ fn main() -> Result<()> {
     let koopa_ir = String::from_utf8(buf).unwrap();
     if mode == "-koopa" {
         // 将 Koopa IR 写入输出文件
-        std::fs::write(output, koopa_ir)?;
+        //std::fs::write(output, koopa_ir)?;
     } else {
         let driver = koopa::front::Driver::from(koopa_ir.clone());
         let program = driver.generate_program().unwrap();

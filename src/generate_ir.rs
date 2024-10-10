@@ -1,9 +1,10 @@
-use std::io::{stderr, Write};
+use std::{collections::HashMap, io::{stderr, Write}};
 use crate::ast::*;
 
 pub struct GenerateIRParams {
     pub var_count: i32,
     // pub first_num: i32,
+    pub sym_tab: HashMap<String, i32>,
 }
 
 pub enum ExpResult {
@@ -18,6 +19,7 @@ impl CompUnit {
         let mut params = GenerateIRParams {
             var_count: 0,
             // first_num: 0,
+            sym_tab: HashMap::new(),
         };
         self.func_def.generate_koopa_ir(buf, &mut params);
     }
@@ -53,7 +55,57 @@ impl FuncType {
 impl Block {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
         writeln!(buf, "%entry:").unwrap();
-        self.stmt.generate_koopa_ir(buf, params);
+        for block_item in &self.block_items {
+            block_item.generate_koopa_ir(buf, params);
+        }
+    }
+}
+
+impl BlockItem {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        match self {
+            BlockItem::Stmt(stmt) => {
+                stmt.generate_koopa_ir(buf, params);
+            }
+            BlockItem::Decl(decl) => {
+                decl.calc_const(params);
+            }
+        }
+    }
+}
+
+impl Decl {
+    pub fn calc_const(&self, params: &mut GenerateIRParams) {
+        self.const_decl.calc_const(params);
+    }
+}
+
+impl ConstDecl {
+    pub fn calc_const(&self, params: &mut GenerateIRParams) {
+        // 直接存到符号表里
+        for const_def in &self.const_defs {
+            const_def.calc_const(params);
+        }
+    }
+}
+
+impl ConstDef {
+    pub fn calc_const(&self, params: &mut GenerateIRParams) {
+        // 直接存到符号表里
+        let init_val = self.const_init_val.calc_const(params);
+        params.sym_tab.insert(self.ident.clone(), init_val);
+    }
+}
+
+impl ConstInitVal {
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        return self.const_exp.calc_const(params);
+    }
+}
+
+impl ConstExp {
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        return self.exp.calc_const(params);
     }
 }
 
@@ -74,6 +126,9 @@ impl Stmt {
 impl Exp {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
         return self.l_or_exp.generate_koopa_ir(buf, params);
+    }
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        return self.l_or_exp.calc_const(params);
     }
 }
 
@@ -132,6 +187,10 @@ impl PrimaryExp {
                         return ExpResult::IntResult(*num);
                     }
                 }
+            }
+            PrimaryExp::LVal(l_val) => {
+                // do nothing
+                return ExpResult::IntResult(0);
             }
         }
     }
@@ -419,5 +478,9 @@ impl LOrExp {
                 return res;
             }
         }
+    }
+
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        
     }
 }
