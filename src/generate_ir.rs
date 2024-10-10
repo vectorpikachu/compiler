@@ -172,6 +172,28 @@ impl UnaryExp {
             }
         }
     }
+
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        match self {
+            UnaryExp::UnaryExp(unary_op, unary_exp) => {
+                let unary_exp_res = unary_exp.calc_const(params); // 先计算里层的表达式
+                match unary_op {
+                    UnaryOp::Add => {
+                        return unary_exp_res;
+                    } 
+                    UnaryOp::Sub => {
+                        return -unary_exp_res;
+                    }
+                    UnaryOp::Rev => {
+                        return !unary_exp_res;
+                    }
+                }
+            }
+            UnaryExp::PrimaryExp(primary_exp) => {
+                return primary_exp.calc_const(params);
+            }
+        }
+    }
 }
 
 
@@ -189,8 +211,26 @@ impl PrimaryExp {
                 }
             }
             PrimaryExp::LVal(l_val) => {
-                // do nothing
-                return ExpResult::IntResult(0);
+                let val = l_val.calc_const(params);
+                return ExpResult::IntResult(val);
+            }
+        }
+    }
+
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        match self {
+            PrimaryExp::Exp(exp) => {
+                return exp.calc_const(params);
+            }
+            PrimaryExp::Number(num) => {
+                match num {
+                    Number::IntConst(num) => {
+                        return *num;
+                    }
+                }
+            }
+            PrimaryExp::LVal(l_val) => {
+                return l_val.calc_const(params);
             }
         }
     }
@@ -234,6 +274,27 @@ impl AddExp {
                 }
                 let res = ExpResult::RegCount(params.var_count);
                 return res;
+            }
+        }
+    }
+
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        match self {
+            AddExp::MulExp(mul_exp) => {
+                return mul_exp.calc_const(params);
+            }
+            AddExp::AddExp(add_exp, add_op, mul_exp) => {
+                let mul_exp_res = mul_exp.calc_const(params);
+                let add_exp_res = add_exp.calc_const(params);
+
+                match add_op {
+                    AddOp::Add => {
+                        return add_exp_res + mul_exp_res;
+                    }
+                    AddOp::Sub => {
+                        return add_exp_res - mul_exp_res;
+                    }
+                }
             }
         }
     }
@@ -281,6 +342,30 @@ impl MulExp {
                 }
                 let res = ExpResult::RegCount(params.var_count);
                 return res;
+            }
+        }
+    }
+
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        match self {
+            MulExp::UnaryExp(unary_exp) => {
+                return unary_exp.calc_const(params);
+            }
+            MulExp::MulExp(mul_exp, mul_op, unary_exp) => {
+                let mul_exp_res = mul_exp.calc_const(params);
+                let unary_exp_res = unary_exp.calc_const(params);
+
+                match mul_op {
+                    MulOp::Mul => {
+                        return mul_exp_res * unary_exp_res;
+                    }
+                    MulOp::Div => {
+                        return mul_exp_res / unary_exp_res;
+                    }
+                    MulOp::Mod => {
+                        return mul_exp_res % unary_exp_res;
+                    }
+                }
             }
         }
     }
@@ -334,6 +419,33 @@ impl RelExp {
             }
         }
     }
+
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        match self {
+            RelExp::AddExp(add_exp) => {
+                return add_exp.calc_const(params);
+            }
+            RelExp::RelExp(rel_exp, rel_op, add_exp) => {
+                let rel_exp_res = rel_exp.calc_const(params);
+                let add_exp_res = add_exp.calc_const(params);
+
+                match rel_op {
+                    RelOp::Lt => {
+                        return if rel_exp_res < add_exp_res {1} else {0};
+                    }
+                    RelOp::Gt => {
+                        return if rel_exp_res > add_exp_res {1} else {0};
+                    }
+                    RelOp::Le => {
+                        return if rel_exp_res <= add_exp_res {1} else {0};
+                    }
+                    RelOp::Ge => {
+                        return if rel_exp_res >= add_exp_res {1} else {0};
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl EqExp {
@@ -375,6 +487,27 @@ impl EqExp {
                 }
                 let res = ExpResult::RegCount(params.var_count);
                 return res;
+            }
+        }
+    }
+
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        match self {
+            EqExp::RelExp(rel_exp) => {
+                return rel_exp.calc_const(params);
+            }
+            EqExp::EqExp(eq_exp, eq_op, rel_exp) => {
+                let eq_exp_res = eq_exp.calc_const(params);
+                let rel_exp_res = rel_exp.calc_const(params);
+
+                match eq_op {
+                    EqOp::Eq => {
+                        return if eq_exp_res == rel_exp_res {1} else {0};
+                    }
+                    EqOp::Ne => {
+                        return if eq_exp_res != rel_exp_res {1} else {0};
+                    }
+                }
             }
         }
     }
@@ -426,6 +559,24 @@ impl LAndExp {
                 
                 let res = ExpResult::RegCount(params.var_count);
                 return res;
+            }
+        }
+    }
+
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        match self {
+            LAndExp::EqExp(eq_exp) => {
+                return eq_exp.calc_const(params);
+            }
+            LAndExp::LAndExp(l_and_exp, l_and_op, eq_exp) => {
+                let l_and_exp_res = l_and_exp.calc_const(params);
+                let eq_exp_res = eq_exp.calc_const(params);
+
+                match l_and_op {
+                    LAndOp::And => {
+                        return if l_and_exp_res != 0 && eq_exp_res != 0 {1} else {0};
+                    }
+                }
             }
         }
     }
@@ -481,6 +632,27 @@ impl LOrExp {
     }
 
     pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
-        
+        match self {
+            LOrExp::LAndExp(l_and_exp) => {
+                return l_and_exp.calc_const(params);
+            }
+            LOrExp::LOrExp(l_or_exp, l_or_op, l_and_exp) => {
+                let l_or_exp_res = l_or_exp.calc_const(params);
+                let l_and_exp_res = l_and_exp.calc_const(params);
+
+                match l_or_op {
+                    LOrOp::Or => {
+                        return if l_or_exp_res != 0 || l_and_exp_res != 0 {1} else {0};
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl LVal {
+    pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
+        let var_val = params.sym_tab.get(&self.ident).unwrap();
+        return *var_val;
     }
 }
