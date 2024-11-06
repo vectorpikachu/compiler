@@ -1,7 +1,4 @@
 fun @main(): i32 {
 %entry:
-  @t = alloc i32
-  %0 = add 5, 1
-  store %0, @t
-  ret undef
+  ret 15
 }

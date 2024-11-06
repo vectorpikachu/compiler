@@ -1,4 +1,4 @@
 int main() {
-  const int main = 5;
-  int t = main + 1;
+  const int d = 10 + 5 * (2 - 1) + !9;
+  return d;
 }

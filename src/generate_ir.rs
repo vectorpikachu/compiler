@@ -263,7 +263,9 @@ impl UnaryExp {
                         return -unary_exp_res;
                     }
                     UnaryOp::Rev => {
-                        return !unary_exp_res;
+                        // println!("!{} = {}", unary_exp_res, 1);
+                        // stdout().write_all(b"rev is called\n").unwrap();
+                        return if unary_exp_res == 0 {1} else {0}
                     }
                 }
             }
@@ -366,9 +368,13 @@ impl AddExp {
 
                 match add_op {
                     AddOp::Add => {
+                        // println!("{} + {}", add_exp_res, mul_exp_res);
+                        // stdout().write_all(b"add is called\n").unwrap();
                         return add_exp_res + mul_exp_res;
                     }
                     AddOp::Sub => {
+                        // println!("{} - {}", add_exp_res, mul_exp_res);
+                        // stdout().write_all(b"sub is called\n").unwrap();
                         return add_exp_res - mul_exp_res;
                     }
                 }
@@ -732,7 +738,10 @@ impl LVal {
         let var_val = params.sym_tab.get(&self.ident).unwrap();
         match *var_val {
             SymVal::ConstVal(res) => return res,
-            SymVal::VarName => return 0
+            SymVal::VarName => {
+                stderr().write_all(b"Error: variables occurred in const init val.\n").unwrap();
+                return 0;
+            }
         }
     }
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
