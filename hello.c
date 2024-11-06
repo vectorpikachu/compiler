@@ -1,3 +1,4 @@
 int main() {
-  const int x = 5 + 6, y = 6;
+  const int main = 5;
+  int t = main + 1;
 }

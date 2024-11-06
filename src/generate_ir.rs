@@ -44,7 +44,7 @@ impl FuncDef {
         self.block.generate_koopa_ir(buf, params);
         if params.func_returned == false {
             // 没有return语句
-            writeln!(buf, "  ret 0").unwrap();
+            writeln!(buf, "  ret undef").unwrap();
         }
         writeln!(buf, "}}").unwrap();
     }
