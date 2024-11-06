@@ -3,6 +3,7 @@ use crate::ast::*;
 
 pub struct GenerateIRParams {
     pub var_count: i32,
+    pub func_returned: bool,
     // pub first_num: i32,
     pub sym_tab: HashMap<String, SymVal>, //只有一个过程的话符号表不能同名的
 }
@@ -23,6 +24,7 @@ impl CompUnit {
         // 计算整个程序的变量计数
         let mut params = GenerateIRParams {
             var_count: 0,
+            func_returned: false,
             // first_num: 0,
             sym_tab: HashMap::new(),
         };
@@ -40,6 +42,10 @@ impl FuncDef {
         self.func_type.generate_koopa_ir(buf);
         // 当前块要计算出最里面的数字.
         self.block.generate_koopa_ir(buf, params);
+        if params.func_returned == false {
+            // 没有return语句
+            writeln!(buf, "  ret 0").unwrap();
+        }
         writeln!(buf, "}}").unwrap();
     }
 }
@@ -62,6 +68,9 @@ impl Block {
         writeln!(buf, "%entry:").unwrap();
         for block_item in &self.block_items {
             block_item.generate_koopa_ir(buf, params);
+            if params.func_returned == true {
+                break;
+            }
         }
     }
 }
@@ -175,6 +184,7 @@ impl Stmt {
                         writeln!(buf, "  ret {}", int_res).unwrap();
                     }
                 }
+                params.func_returned = true;
             }
             Stmt::Assgn(l_val, exp) => {
                 let exp_res = exp.generate_koopa_ir(buf, params);
