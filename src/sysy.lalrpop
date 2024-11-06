@@ -34,7 +34,11 @@ BlockItem: BlockItem = {
   <decl: Decl> => BlockItem::Decl(decl),
 }
 
-Stmt: Stmt = "return" <exp: Exp> ";" => Stmt { <> };
+Stmt: Stmt = {
+  "return" <exp: Exp> ";" => Stmt::Return(exp),
+  <l_val: LVal> "=" <exp: Exp> ";" => Stmt::Assgn(l_val, exp),
+};
+
 
 Exp : Exp = <l_or_exp: LOrExp> => Exp { <> };
 
@@ -126,12 +130,21 @@ Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
 
 Number: Number = <int_const: INT_CONST> => Number::IntConst(int_const);
 
-Decl: Decl = <const_decl: ConstDecl> => Decl { <> };
+Decl: Decl = {
+  <const_decl: ConstDecl> => Decl::ConstDecl(const_decl),
+  <var_decl: VarDecl> => Decl::VarDecl(var_decl),
+};
 
 ConstDecl: ConstDecl = "const" <btype: BType> <const_def_head: ConstDef> 
   <const_def_tail: ("," <ConstDef>)*> ";" => ConstDecl {
     btype, 
     const_defs: vec![const_def_head].into_iter().chain(const_def_tail).collect(),
+  };
+
+VarDecl: VarDecl = <btype: BType> <var_def_head: VarDef>
+  <var_def_tail: ("," <VarDef>)*> ";" => VarDecl {
+    btype,
+    var_defs: vec![var_def_head].into_iter().chain(var_def_tail).collect(),
   };
 
 BType: BType = "int" => BType::Int;
@@ -141,7 +154,14 @@ ConstDef: ConstDef = <ident: Ident> "=" <const_init_val: ConstInitVal> =>
 
 ConstInitVal: ConstInitVal = <const_exp: ConstExp> => ConstInitVal { <> };
 
+VarDef: VarDef = {
+  <ident: Ident> "=" <var_init_val: InitVal> => VarDef::VarDefInit(<>),
+  <ident: Ident> => VarDef::VarDefUninit(<>),
+  };
+
 LVal: LVal = <ident: Ident> => LVal { <> };
+
+InitVal: InitVal = <exp: Exp> => InitVal { <> };
 
 ConstExp: ConstExp = <exp: Exp> => ConstExp { <> };
 

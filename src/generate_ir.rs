@@ -4,12 +4,17 @@ use crate::ast::*;
 pub struct GenerateIRParams {
     pub var_count: i32,
     // pub first_num: i32,
-    pub sym_tab: HashMap<String, i32>,
+    pub sym_tab: HashMap<String, SymVal>, //只有一个过程的话符号表不能同名的
 }
 
 pub enum ExpResult {
     RegCount(i32),
     IntResult(i32),
+}
+
+pub enum SymVal {
+    ConstVal(i32),
+    VarName,
 }
 
 impl CompUnit {
@@ -68,15 +73,22 @@ impl BlockItem {
                 stmt.generate_koopa_ir(buf, params);
             }
             BlockItem::Decl(decl) => {
-                decl.calc_const(params);
+               decl.generate_koopa_ir(buf, params);
             }
         }
     }
 }
 
 impl Decl {
-    pub fn calc_const(&self, params: &mut GenerateIRParams) {
-        self.const_decl.calc_const(params);
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        match self {
+            Decl::ConstDecl(const_decl) => {
+                const_decl.calc_const(params);
+            }
+            Decl::VarDecl(var_decl) => {
+                var_decl.generate_koopa_ir(buf, params);
+            }
+        }
     }
 }
 
@@ -93,7 +105,7 @@ impl ConstDef {
     pub fn calc_const(&self, params: &mut GenerateIRParams) {
         // 直接存到符号表里
         let init_val = self.const_init_val.calc_const(params);
-        params.sym_tab.insert(self.ident.clone(), init_val);
+        params.sym_tab.insert(self.ident.clone(), SymVal::ConstVal(init_val));
     }
 }
 
@@ -109,15 +121,71 @@ impl ConstExp {
     }
 }
 
+impl VarDecl {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        for var_def in &self.var_defs {
+            var_def.generate_koopa_ir(buf, params);
+        }
+    }
+}
+
+impl VarDef {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        // 首先使用alloc命令, 接着根据是否有初值来计算.
+        match self {
+            VarDef::VarDefUninit(var_name) => {
+                writeln!(buf, "  @{} = alloc i32", var_name).unwrap();
+                // 存入符号表中
+                params.sym_tab.insert(var_name.clone(), SymVal::VarName);
+            }
+            VarDef::VarDefInit(var_name, init_val) => {
+                writeln!(buf, "  @{} = alloc i32", var_name).unwrap();
+                let val_result = init_val.generate_koopa_ir(buf, params);
+                match val_result {
+                    ExpResult::RegCount(reg) => {
+                        writeln!(buf, "  store %{}, @{}", reg-1, var_name).unwrap();
+                    }
+                    ExpResult::IntResult(int_val) => {
+                        writeln!(buf, "  store {}, @{}", int_val, var_name).unwrap();
+                    }
+                }
+                // 存入符号表中
+                params.sym_tab.insert(var_name.clone(), SymVal::VarName);
+            }
+        }
+    }
+}
+
+impl InitVal {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
+        return self.exp.generate_koopa_ir(buf, params);
+    } 
+}
+
 impl Stmt {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
-        let exp_res = self.exp.generate_koopa_ir(buf, params);
-        match exp_res {
-            ExpResult::RegCount(reg_count) => {
-                writeln!(buf, "  ret %{}", reg_count-1).unwrap();
+        match self {
+            Stmt::Return(exp) => {
+                let exp_res = exp.generate_koopa_ir(buf, params);
+                match exp_res {
+                    ExpResult::RegCount(reg_count) => {
+                        writeln!(buf, "  ret %{}", reg_count-1).unwrap();
+                    }
+                    ExpResult::IntResult(int_res) => {
+                        writeln!(buf, "  ret {}", int_res).unwrap();
+                    }
+                }
             }
-            ExpResult::IntResult(int_res) => {
-                writeln!(buf, "  ret {}", int_res).unwrap();
+            Stmt::Assgn(l_val, exp) => {
+                let exp_res = exp.generate_koopa_ir(buf, params);
+                match exp_res {
+                    ExpResult::RegCount(reg_count) => {
+                        writeln!(buf, "  store %{}, @{}", reg_count-1, l_val.ident).unwrap();
+                    }
+                    ExpResult::IntResult(int_res) => {
+                        writeln!(buf, "  store {}, @{}", int_res, l_val.ident).unwrap();
+                    }
+                }
             }
         }
     }
@@ -211,8 +279,7 @@ impl PrimaryExp {
                 }
             }
             PrimaryExp::LVal(l_val) => {
-                let val = l_val.calc_const(params);
-                return ExpResult::IntResult(val);
+                return l_val.generate_koopa_ir(buf, params);
             }
         }
     }
@@ -653,6 +720,20 @@ impl LOrExp {
 impl LVal {
     pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
         let var_val = params.sym_tab.get(&self.ident).unwrap();
-        return *var_val;
+        match *var_val {
+            SymVal::ConstVal(res) => return res,
+            SymVal::VarName => return 0
+        }
+    }
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
+        let var_val = params.sym_tab.get(&self.ident).unwrap();
+        match *var_val {
+            SymVal::ConstVal(res) => return ExpResult::IntResult(res),
+            SymVal::VarName => {
+                writeln!(buf, "  %{} = load @{}", params.var_count, self.ident).unwrap();
+                params.var_count = params.var_count + 1;
+                return ExpResult::RegCount(params.var_count);
+            }
+        }
     }
 }

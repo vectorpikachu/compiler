@@ -33,8 +33,9 @@ pub enum BlockItem {
 
 
 #[derive(Debug)]
-pub struct Stmt {
-    pub exp: Exp,
+pub enum Stmt {
+    Return(Exp),
+    Assgn(LVal, Exp),
 }
 
 
@@ -149,14 +150,27 @@ pub enum LOrExp {
 }
 
 #[derive(Debug)]
-pub struct Decl {
-    pub const_decl: ConstDecl,
+pub enum Decl {
+    ConstDecl(ConstDecl),
+    VarDecl(VarDecl),
 }
 
 #[derive(Debug)]
-pub struct  ConstDecl {
+pub struct ConstDecl {
     pub btype: BType,
     pub const_defs: Vec<ConstDef>,
+}
+
+#[derive(Debug)]
+pub struct VarDecl {
+    pub btype: BType,
+    pub var_defs: Vec<VarDef>,
+}
+
+#[derive(Debug)]
+pub enum VarDef {
+    VarDefUninit(String),
+    VarDefInit(String, InitVal),
 }
 
 #[derive(Debug)]
@@ -182,5 +196,10 @@ pub struct LVal {
 
 #[derive(Debug)]
 pub struct ConstExp {
+    pub exp: Exp,
+}
+
+#[derive(Debug)]
+pub struct InitVal {
     pub exp: Exp,
 }
