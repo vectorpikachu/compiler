@@ -49,8 +49,10 @@ fn main() -> Result<()> {
 
         let mut params = generate_asm::GenerateAsmParams {
             current_register: 0,
+            stack_bytes: 0,
             register_data: HashMap::new(),
             register_usage: HashMap::new(),
+            stack_state: HashMap::new(),
         };
 
         let register_list = vec![
