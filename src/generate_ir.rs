@@ -53,10 +53,15 @@ impl SymTable {
         // 返回这个新建立的符号表
         self.next.as_mut().unwrap().as_mut()
     }
-    pub fn delete_table(&mut self) {
-        // y = x.take(), 这样y里面是Option中的东西, 而x里面是None
-        if let Some(mut prev_table) = self.prev.take() {
+    pub fn delete_table(&mut self) -> Option<&mut SymTable> {
+        if let Some(ref mut prev_table) = self.prev {
+            // 断开前一个表与当前表的链接
             prev_table.next = None;
+            // 返回前一个表的可变引用
+            Some(&mut **prev_table)
+        } else {
+            // 如果没有前一个表，则返回 None
+            None
         }
     }
 }
@@ -145,14 +150,14 @@ impl FuncType {
 impl Block {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
         // 新建一个符号表
-        params.sym_tab.insert_table(params.sym_tab.level+1);
+        params.sym_tab = params.sym_tab.insert_table(params.sym_tab.level+1).clone();
         for block_item in &self.block_items {
             block_item.generate_koopa_ir(buf, params);
             if params.func_returned == true {
                 break;
             }
         }
-        params.sym_tab.delete_table();
+        params.sym_tab = params.sym_tab.delete_table().unwrap().clone();
     }
 }
 

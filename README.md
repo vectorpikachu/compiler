@@ -27,3 +27,6 @@ autotest -koopa -s lv3 /root/compiler
 docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -riscv -s lv4 /root/compiler
 ```
 
+```
+docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -koopa -s lv5 /root/compiler
+```
