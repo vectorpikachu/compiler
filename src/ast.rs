@@ -36,6 +36,8 @@ pub enum BlockItem {
 pub enum Stmt {
     Return(Exp),
     Assgn(LVal, Exp),
+    Exp(Option<Exp>),
+    Block(Block),
 }
 
 

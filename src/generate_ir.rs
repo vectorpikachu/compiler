@@ -1,11 +1,82 @@
-use std::{collections::HashMap, io::{stderr, Write}};
+use std::{
+    collections::HashMap, io::{stderr, Write}
+};
+
 use crate::ast::*;
 
 pub struct GenerateIRParams {
     pub var_count: i32,
     pub func_returned: bool,
     // pub first_num: i32,
-    pub sym_tab: HashMap<String, SymVal>, //只有一个过程的话符号表不能同名的
+    pub sym_tab: SymTable,
+}
+
+#[derive(Clone)]
+pub struct SymTable {
+    pub table: HashMap<String, SymVal>,
+    pub prev: Option<Box<SymTable>>,
+    pub next: Option<Box<SymTable>>,
+    pub level: i32,
+    // 符号表是一层一层的解开的, 应该类似于一个列表
+    // 而不是一个树状结构
+}
+
+impl SymTable {
+    pub fn new(level: i32) -> Self {
+        SymTable {
+            table: HashMap::new(),
+            prev: None,
+            next: None,
+            level: level,
+        }
+    }
+    pub fn insert(&mut self, name: String, val: SymVal) {
+        self.table.insert(name, val);
+    }
+    pub fn query(&self, name: String) -> Option<SymVal> {
+        if let Some(sym_val) = self.table.get(&name) {
+            return Some(sym_val.clone());
+        }
+        if let Some(prev_table) = &self.prev {
+            return prev_table.query(name);
+        }
+        return None;
+    }
+    pub fn insert_table(&mut self, level: i32) -> &mut SymTable {
+        let mut new_table = Box::new(SymTable::new(level));
+        new_table.prev = Some(Box::new(self.clone()));
+
+        if let Some(ref mut next_table) = self.next {
+            next_table.prev = Some(new_table.clone());
+        }
+        self.next = Some(new_table);
+        // 返回这个新建立的符号表
+        self.next.as_mut().unwrap().as_mut()
+    }
+    pub fn delete_table(&mut self) {
+        // y = x.take(), 这样y里面是Option中的东西, 而x里面是None
+        if let Some(mut prev_table) = self.prev.take() {
+            prev_table.next = None;
+        }
+    }
+}
+
+pub fn load_var_to_sym_tab(var_name: String, params: &mut GenerateIRParams) -> i32 {
+    let mut alias = params.sym_tab.query(var_name.clone());
+    if let Some(sym_val) = alias.take() {
+        match sym_val {
+            SymVal::ConstVal(_) => { return 0; }
+            SymVal::VarName(idx) => {
+                params
+                    .sym_tab
+                    .insert(var_name.clone(), SymVal::VarName(idx + 1));
+                return idx+1;
+            }
+        }
+    } else {
+        params.sym_tab.insert(var_name.clone(), SymVal::VarName(1));
+        return 1;
+    }
 }
 
 pub enum ExpResult {
@@ -13,9 +84,10 @@ pub enum ExpResult {
     IntResult(i32),
 }
 
+#[derive(Clone)]
 pub enum SymVal {
     ConstVal(i32),
-    VarName,
+    VarName(i32), // 标记是同名的第几个变量.
 }
 
 impl CompUnit {
@@ -26,7 +98,12 @@ impl CompUnit {
             var_count: 0,
             func_returned: false,
             // first_num: 0,
-            sym_tab: HashMap::new(),
+            sym_tab: SymTable {
+                table: HashMap::new(),
+                prev: None,
+                next: None,
+                level: 0,
+            }, // 这个符号表就相当于一个全局的符号表
         };
         self.func_def.generate_koopa_ir(buf, &mut params);
     }
@@ -35,12 +112,14 @@ impl CompUnit {
 impl FuncDef {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
         if self.ident != "main" {
-            stderr().write_all(b"Error: only support main function\n").unwrap();
+            stderr()
+                .write_all(b"Error: only support main function\n")
+                .unwrap();
             return;
         }
         write!(buf, "fun @{}(): ", self.ident).unwrap();
         self.func_type.generate_koopa_ir(buf);
-        // 当前块要计算出最里面的数字.
+        writeln!(buf, "%entry:").unwrap();
         self.block.generate_koopa_ir(buf, params);
         if params.func_returned == false {
             // 没有return语句
@@ -65,13 +144,15 @@ impl FuncType {
 
 impl Block {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
-        writeln!(buf, "%entry:").unwrap();
+        // 新建一个符号表
+        params.sym_tab.insert_table(params.sym_tab.level+1);
         for block_item in &self.block_items {
             block_item.generate_koopa_ir(buf, params);
             if params.func_returned == true {
                 break;
             }
         }
+        params.sym_tab.delete_table();
     }
 }
 
@@ -82,7 +163,7 @@ impl BlockItem {
                 stmt.generate_koopa_ir(buf, params);
             }
             BlockItem::Decl(decl) => {
-               decl.generate_koopa_ir(buf, params);
+                decl.generate_koopa_ir(buf, params);
             }
         }
     }
@@ -114,7 +195,9 @@ impl ConstDef {
     pub fn calc_const(&self, params: &mut GenerateIRParams) {
         // 直接存到符号表里
         let init_val = self.const_init_val.calc_const(params);
-        params.sym_tab.insert(self.ident.clone(), SymVal::ConstVal(init_val));
+        params
+            .sym_tab
+            .insert(self.ident.clone(), SymVal::ConstVal(init_val));
     }
 }
 
@@ -143,23 +226,23 @@ impl VarDef {
         // 首先使用alloc命令, 接着根据是否有初值来计算.
         match self {
             VarDef::VarDefUninit(var_name) => {
-                writeln!(buf, "  @{} = alloc i32", var_name).unwrap();
                 // 存入符号表中
-                params.sym_tab.insert(var_name.clone(), SymVal::VarName);
+                let idx = load_var_to_sym_tab(var_name.clone(), params);
+                writeln!(buf, "  @{}_{} = alloc i32", var_name, idx).unwrap();
             }
             VarDef::VarDefInit(var_name, init_val) => {
-                writeln!(buf, "  @{} = alloc i32", var_name).unwrap();
+                // 存入符号表中
+                let idx = load_var_to_sym_tab(var_name.clone(), params);
+                writeln!(buf, "  @{}_{} = alloc i32", var_name, idx).unwrap();
                 let val_result = init_val.generate_koopa_ir(buf, params);
                 match val_result {
                     ExpResult::RegCount(reg) => {
-                        writeln!(buf, "  store %{}, @{}", reg-1, var_name).unwrap();
+                        writeln!(buf, "  store %{}, @{}_{}", reg - 1, var_name, idx).unwrap();
                     }
                     ExpResult::IntResult(int_val) => {
-                        writeln!(buf, "  store {}, @{}", int_val, var_name).unwrap();
+                        writeln!(buf, "  store {}, @{}_{}", int_val, var_name, idx).unwrap();
                     }
                 }
-                // 存入符号表中
-                params.sym_tab.insert(var_name.clone(), SymVal::VarName);
             }
         }
     }
@@ -168,7 +251,7 @@ impl VarDef {
 impl InitVal {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
         return self.exp.generate_koopa_ir(buf, params);
-    } 
+    }
 }
 
 impl Stmt {
@@ -178,7 +261,7 @@ impl Stmt {
                 let exp_res = exp.generate_koopa_ir(buf, params);
                 match exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "  ret %{}", reg_count-1).unwrap();
+                        writeln!(buf, "  ret %{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         writeln!(buf, "  ret {}", int_res).unwrap();
@@ -187,15 +270,30 @@ impl Stmt {
                 params.func_returned = true;
             }
             Stmt::Assgn(l_val, exp) => {
+                let idx_val = params.sym_tab.query(l_val.ident.clone()).unwrap();
+                let mut idx: i32 = 0;
+                match idx_val {
+                    SymVal::ConstVal(_) => {}
+                    SymVal::VarName(index) => { idx = index; }
+                }
                 let exp_res = exp.generate_koopa_ir(buf, params);
                 match exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "  store %{}, @{}", reg_count-1, l_val.ident).unwrap();
+                        writeln!(buf, "  store %{}, @{}_{}", reg_count - 1, l_val.ident, idx).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
-                        writeln!(buf, "  store {}, @{}", int_res, l_val.ident).unwrap();
+                        writeln!(buf, "  store {}, @{}_{}", int_res, l_val.ident, idx).unwrap();
                     }
                 }
+            }
+            Stmt::Exp(exp) => match exp {
+                Some(some_exp) => {
+                    let _exp_res = some_exp.generate_koopa_ir(buf, params);
+                }
+                None => {}
+            },
+            Stmt::Block(block) => {
+                block.generate_koopa_ir(buf, params);
             }
         }
     }
@@ -211,34 +309,33 @@ impl Exp {
 }
 
 impl UnaryExp {
-    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult{
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
         match self {
             UnaryExp::UnaryExp(unary_op, unary_exp) => {
                 let unary_exp_res = unary_exp.generate_koopa_ir(buf, params); // 先计算里层的表达式
-                
+
                 let mut unary_exp_buf: Vec<u8> = Vec::new();
                 match unary_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        write!(unary_exp_buf, "%{}", reg_count-1).unwrap();
+                        write!(unary_exp_buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         write!(unary_exp_buf, "{}", int_res).unwrap();
                     }
                 }
-                
+
                 let unary_exp_str = String::from_utf8(unary_exp_buf).unwrap();
 
                 match unary_op {
                     UnaryOp::Add => {
                         return unary_exp_res;
-                    } 
+                    }
                     UnaryOp::Sub => {
-                        writeln!(buf, "  %{} = sub 0, {}", params.var_count, 
-                            unary_exp_str).unwrap();
+                        writeln!(buf, "  %{} = sub 0, {}", params.var_count, unary_exp_str)
+                            .unwrap();
                     }
                     UnaryOp::Rev => {
-                        writeln!(buf, "  %{} = eq {}, 0", params.var_count, 
-                            unary_exp_str).unwrap();
+                        writeln!(buf, "  %{} = eq {}, 0", params.var_count, unary_exp_str).unwrap();
                     }
                 }
                 params.var_count = params.var_count + 1;
@@ -258,14 +355,14 @@ impl UnaryExp {
                 match unary_op {
                     UnaryOp::Add => {
                         return unary_exp_res;
-                    } 
+                    }
                     UnaryOp::Sub => {
                         return -unary_exp_res;
                     }
                     UnaryOp::Rev => {
                         // println!("!{} = {}", unary_exp_res, 1);
                         // stdout().write_all(b"rev is called\n").unwrap();
-                        return if unary_exp_res == 0 {1} else {0}
+                        return if unary_exp_res == 0 { 1 } else { 0 };
                     }
                 }
             }
@@ -276,20 +373,17 @@ impl UnaryExp {
     }
 }
 
-
 impl PrimaryExp {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
         match self {
             PrimaryExp::Exp(exp) => {
                 return exp.generate_koopa_ir(buf, params);
             }
-            PrimaryExp::Number(num) => {
-                match num {
-                    Number::IntConst(num) => {
-                        return ExpResult::IntResult(*num);
-                    }
+            PrimaryExp::Number(num) => match num {
+                Number::IntConst(num) => {
+                    return ExpResult::IntResult(*num);
                 }
-            }
+            },
             PrimaryExp::LVal(l_val) => {
                 return l_val.generate_koopa_ir(buf, params);
             }
@@ -301,13 +395,11 @@ impl PrimaryExp {
             PrimaryExp::Exp(exp) => {
                 return exp.calc_const(params);
             }
-            PrimaryExp::Number(num) => {
-                match num {
-                    Number::IntConst(num) => {
-                        return *num;
-                    }
+            PrimaryExp::Number(num) => match num {
+                Number::IntConst(num) => {
+                    return *num;
                 }
-            }
+            },
             PrimaryExp::LVal(l_val) => {
                 return l_val.calc_const(params);
             }
@@ -336,7 +428,7 @@ impl AddExp {
 
                 match add_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        write!(buf, "%{}", reg_count-1).unwrap();
+                        write!(buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         write!(buf, "{}", int_res).unwrap();
@@ -345,7 +437,7 @@ impl AddExp {
                 write!(buf, ", ").unwrap();
                 match mul_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "%{}", reg_count-1).unwrap();
+                        writeln!(buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         writeln!(buf, "{}", int_res).unwrap();
@@ -408,7 +500,7 @@ impl MulExp {
 
                 match mul_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        write!(buf, "%{}", reg_count-1).unwrap();
+                        write!(buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         write!(buf, "{}", int_res).unwrap();
@@ -417,7 +509,7 @@ impl MulExp {
                 write!(buf, ", ").unwrap();
                 match unary_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "%{}", reg_count-1).unwrap();
+                        writeln!(buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         writeln!(buf, "{}", int_res).unwrap();
@@ -482,7 +574,7 @@ impl RelExp {
 
                 match rel_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        write!(buf, "%{}", reg_count-1).unwrap();
+                        write!(buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         write!(buf, "{}", int_res).unwrap();
@@ -491,7 +583,7 @@ impl RelExp {
                 write!(buf, ", ").unwrap();
                 match add_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "%{}", reg_count-1).unwrap();
+                        writeln!(buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         writeln!(buf, "{}", int_res).unwrap();
@@ -514,16 +606,16 @@ impl RelExp {
 
                 match rel_op {
                     RelOp::Lt => {
-                        return if rel_exp_res < add_exp_res {1} else {0};
+                        return if rel_exp_res < add_exp_res { 1 } else { 0 };
                     }
                     RelOp::Gt => {
-                        return if rel_exp_res > add_exp_res {1} else {0};
+                        return if rel_exp_res > add_exp_res { 1 } else { 0 };
                     }
                     RelOp::Le => {
-                        return if rel_exp_res <= add_exp_res {1} else {0};
+                        return if rel_exp_res <= add_exp_res { 1 } else { 0 };
                     }
                     RelOp::Ge => {
-                        return if rel_exp_res >= add_exp_res {1} else {0};
+                        return if rel_exp_res >= add_exp_res { 1 } else { 0 };
                     }
                 }
             }
@@ -553,7 +645,7 @@ impl EqExp {
 
                 match eq_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        write!(buf, "%{}", reg_count-1).unwrap();
+                        write!(buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         write!(buf, "{}", int_res).unwrap();
@@ -562,7 +654,7 @@ impl EqExp {
                 write!(buf, ", ").unwrap();
                 match rel_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "%{}", reg_count-1).unwrap();
+                        writeln!(buf, "%{}", reg_count - 1).unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         writeln!(buf, "{}", int_res).unwrap();
@@ -585,10 +677,10 @@ impl EqExp {
 
                 match eq_op {
                     EqOp::Eq => {
-                        return if eq_exp_res == rel_exp_res {1} else {0};
+                        return if eq_exp_res == rel_exp_res { 1 } else { 0 };
                     }
                     EqOp::Ne => {
-                        return if eq_exp_res != rel_exp_res {1} else {0};
+                        return if eq_exp_res != rel_exp_res { 1 } else { 0 };
                     }
                 }
             }
@@ -609,37 +701,40 @@ impl LAndExp {
 
                 match l_and_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, 
-                            reg_count-1).unwrap();
+                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, reg_count - 1)
+                            .unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
-                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, 
-                            int_res).unwrap();
+                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, int_res).unwrap();
                     }
                 }
                 params.var_count = params.var_count + 1;
 
                 match eq_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, 
-                            reg_count-1).unwrap();
+                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, reg_count - 1)
+                            .unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
-                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, 
-                            int_res).unwrap();
+                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, int_res).unwrap();
                     }
                 }
                 params.var_count = params.var_count + 1;
 
                 match l_and_op {
                     LAndOp::And => {
-                        writeln!(buf, "  %{} = and %{}, %{}", params.var_count,
-                            params.var_count-2,
-                            params.var_count-1).unwrap();
+                        writeln!(
+                            buf,
+                            "  %{} = and %{}, %{}",
+                            params.var_count,
+                            params.var_count - 2,
+                            params.var_count - 1
+                        )
+                        .unwrap();
                     }
                 }
                 params.var_count = params.var_count + 1;
-                
+
                 let res = ExpResult::RegCount(params.var_count);
                 return res;
             }
@@ -657,7 +752,11 @@ impl LAndExp {
 
                 match l_and_op {
                     LAndOp::And => {
-                        return if l_and_exp_res != 0 && eq_exp_res != 0 {1} else {0};
+                        return if l_and_exp_res != 0 && eq_exp_res != 0 {
+                            1
+                        } else {
+                            0
+                        };
                     }
                 }
             }
@@ -677,33 +776,36 @@ impl LOrExp {
 
                 match l_or_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, 
-                            reg_count-1).unwrap();
+                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, reg_count - 1)
+                            .unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
-                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, 
-                            int_res).unwrap();
+                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, int_res).unwrap();
                     }
                 }
                 params.var_count = params.var_count + 1;
 
                 match l_and_exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, 
-                            reg_count-1).unwrap();
+                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, reg_count - 1)
+                            .unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
-                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, 
-                            int_res).unwrap();
+                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, int_res).unwrap();
                     }
                 }
                 params.var_count = params.var_count + 1;
 
                 match l_or_op {
                     LOrOp::Or => {
-                        writeln!(buf, "  %{} = or %{}, %{}", params.var_count,
-                            params.var_count-2,
-                            params.var_count-1).unwrap();
+                        writeln!(
+                            buf,
+                            "  %{} = or %{}, %{}",
+                            params.var_count,
+                            params.var_count - 2,
+                            params.var_count - 1
+                        )
+                        .unwrap();
                     }
                 }
                 params.var_count = params.var_count + 1;
@@ -725,7 +827,11 @@ impl LOrExp {
 
                 match l_or_op {
                     LOrOp::Or => {
-                        return if l_or_exp_res != 0 || l_and_exp_res != 0 {1} else {0};
+                        return if l_or_exp_res != 0 || l_and_exp_res != 0 {
+                            1
+                        } else {
+                            0
+                        };
                     }
                 }
             }
@@ -735,21 +841,23 @@ impl LOrExp {
 
 impl LVal {
     pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
-        let var_val = params.sym_tab.get(&self.ident).unwrap();
-        match *var_val {
+        let var_val = params.sym_tab.query(self.ident.clone()).unwrap();
+        match var_val {
             SymVal::ConstVal(res) => return res,
-            SymVal::VarName => {
-                stderr().write_all(b"Error: variables occurred in const init val.\n").unwrap();
+            SymVal::VarName(_idx) => {
+                stderr()
+                    .write_all(b"Error: variables occurred in const init val.\n")
+                    .unwrap();
                 return 0;
             }
         }
     }
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
-        let var_val = params.sym_tab.get(&self.ident).unwrap();
-        match *var_val {
+        let var_val = params.sym_tab.query(self.ident.clone()).unwrap();
+        match var_val {
             SymVal::ConstVal(res) => return ExpResult::IntResult(res),
-            SymVal::VarName => {
-                writeln!(buf, "  %{} = load @{}", params.var_count, self.ident).unwrap();
+            SymVal::VarName(idx) => {
+                writeln!(buf, "  %{} = load @{}_{}", params.var_count, self.ident, idx).unwrap();
                 params.var_count = params.var_count + 1;
                 return ExpResult::RegCount(params.var_count);
             }

@@ -1,4 +1,8 @@
 int main() {
-  const int x = 1;
-  return x;
+  int a = 1, b = 2;
+  {
+    int a = 2;
+    b = b + a;
+  }
+  return b;
 }
