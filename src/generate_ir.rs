@@ -9,6 +9,7 @@ pub struct GenerateIRParams {
     pub func_returned: bool,
     // pub first_num: i32,
     pub sym_tab: SymTable,
+    pub cur_var_idx: HashMap<String, i32>, // 当前IR变量的下标
 }
 
 #[derive(Clone)]
@@ -67,20 +68,27 @@ impl SymTable {
 }
 
 pub fn load_var_to_sym_tab(var_name: String, params: &mut GenerateIRParams) -> i32 {
+    let idx_val = params.cur_var_idx.get(&var_name);
+    let idx: i32;
+    match idx_val {
+        Some(pre_idx) => { idx = *pre_idx + 1; }
+        None => { idx = 1; }
+    }
+    params.cur_var_idx.insert(var_name.clone(), idx);
     let mut alias = params.sym_tab.query(var_name.clone());
     if let Some(sym_val) = alias.take() {
         match sym_val {
             SymVal::ConstVal(_) => { return 0; }
-            SymVal::VarName(idx) => {
+            SymVal::VarName(_idx) => {
                 params
                     .sym_tab
-                    .insert(var_name.clone(), SymVal::VarName(idx + 1));
-                return idx+1;
+                    .insert(var_name.clone(), SymVal::VarName(idx));
+                return idx;
             }
         }
     } else {
-        params.sym_tab.insert(var_name.clone(), SymVal::VarName(1));
-        return 1;
+        params.sym_tab.insert(var_name.clone(), SymVal::VarName(idx));
+        return idx;
     }
 }
 
@@ -109,6 +117,7 @@ impl CompUnit {
                 next: None,
                 level: 0,
             }, // 这个符号表就相当于一个全局的符号表
+            cur_var_idx: HashMap::new(),
         };
         self.func_def.generate_koopa_ir(buf, &mut params);
     }
