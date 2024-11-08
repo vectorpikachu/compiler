@@ -1,5 +1,6 @@
 use std::{
-    collections::HashMap, io::{stderr, Write}
+    collections::HashMap,
+    io::{stderr, Write},
 };
 
 use crate::ast::*;
@@ -71,14 +72,23 @@ pub fn load_var_to_sym_tab(var_name: String, params: &mut GenerateIRParams) -> i
     let idx_val = params.cur_var_idx.get(&var_name);
     let idx: i32;
     match idx_val {
-        Some(pre_idx) => { idx = *pre_idx + 1; }
-        None => { idx = 1; }
+        Some(pre_idx) => {
+            idx = *pre_idx + 1;
+        }
+        None => {
+            idx = 1;
+        }
     }
     params.cur_var_idx.insert(var_name.clone(), idx);
     let mut alias = params.sym_tab.query(var_name.clone());
     if let Some(sym_val) = alias.take() {
         match sym_val {
-            SymVal::ConstVal(_) => { return 0; }
+            SymVal::ConstVal(_) => {
+                params
+                    .sym_tab
+                    .insert(var_name.clone(), SymVal::VarName(idx));
+                return idx;
+            }
             SymVal::VarName(_idx) => {
                 params
                     .sym_tab
@@ -87,7 +97,9 @@ pub fn load_var_to_sym_tab(var_name: String, params: &mut GenerateIRParams) -> i
             }
         }
     } else {
-        params.sym_tab.insert(var_name.clone(), SymVal::VarName(idx));
+        params
+            .sym_tab
+            .insert(var_name.clone(), SymVal::VarName(idx));
         return idx;
     }
 }
@@ -159,7 +171,10 @@ impl FuncType {
 impl Block {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
         // 新建一个符号表
-        params.sym_tab = params.sym_tab.insert_table(params.sym_tab.level+1).clone();
+        params.sym_tab = params
+            .sym_tab
+            .insert_table(params.sym_tab.level + 1)
+            .clone();
         for block_item in &self.block_items {
             block_item.generate_koopa_ir(buf, params);
             if params.func_returned == true {
@@ -288,12 +303,15 @@ impl Stmt {
                 let mut idx: i32 = 0;
                 match idx_val {
                     SymVal::ConstVal(_) => {}
-                    SymVal::VarName(index) => { idx = index; }
+                    SymVal::VarName(index) => {
+                        idx = index;
+                    }
                 }
                 let exp_res = exp.generate_koopa_ir(buf, params);
                 match exp_res {
                     ExpResult::RegCount(reg_count) => {
-                        writeln!(buf, "  store %{}, @{}_{}", reg_count - 1, l_val.ident, idx).unwrap();
+                        writeln!(buf, "  store %{}, @{}_{}", reg_count - 1, l_val.ident, idx)
+                            .unwrap();
                     }
                     ExpResult::IntResult(int_res) => {
                         writeln!(buf, "  store {}, @{}_{}", int_res, l_val.ident, idx).unwrap();
@@ -871,7 +889,12 @@ impl LVal {
         match var_val {
             SymVal::ConstVal(res) => return ExpResult::IntResult(res),
             SymVal::VarName(idx) => {
-                writeln!(buf, "  %{} = load @{}_{}", params.var_count, self.ident, idx).unwrap();
+                writeln!(
+                    buf,
+                    "  %{} = load @{}_{}",
+                    params.var_count, self.ident, idx
+                )
+                .unwrap();
                 params.var_count = params.var_count + 1;
                 return ExpResult::RegCount(params.var_count);
             }
