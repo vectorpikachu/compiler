@@ -8,9 +8,13 @@ use crate::ast::*;
 pub struct GenerateIRParams {
     pub var_count: i32,
     pub func_returned: bool,
+    pub if_level: i32, // 判断当前if的层数
     // pub first_num: i32,
     pub sym_tab: SymTable,
     pub cur_var_idx: HashMap<String, i32>, // 当前IR变量的下标
+    pub else_idx: i32,
+    pub then_idx: i32,
+    pub end_idx: i32,
 }
 
 #[derive(Clone)]
@@ -122,6 +126,7 @@ impl CompUnit {
         let mut params = GenerateIRParams {
             var_count: 0,
             func_returned: false,
+            if_level: 0,
             // first_num: 0,
             sym_tab: SymTable {
                 table: HashMap::new(),
@@ -130,6 +135,9 @@ impl CompUnit {
                 level: 0,
             }, // 这个符号表就相当于一个全局的符号表
             cur_var_idx: HashMap::new(),
+            else_idx: 0,
+            then_idx: 0,
+            end_idx: 0,
         };
         self.func_def.generate_koopa_ir(buf, &mut params);
     }
@@ -283,10 +291,10 @@ impl InitVal {
     }
 }
 
-impl Stmt {
+impl NonIfStmt {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
         match self {
-            Stmt::Return(exp) => {
+            NonIfStmt::Return(exp) => {
                 let exp_res = exp.generate_koopa_ir(buf, params);
                 match exp_res {
                     ExpResult::RegCount(reg_count) => {
@@ -298,7 +306,7 @@ impl Stmt {
                 }
                 params.func_returned = true;
             }
-            Stmt::Assgn(l_val, exp) => {
+            NonIfStmt::Assgn(l_val, exp) => {
                 let idx_val = params.sym_tab.query(l_val.ident.clone()).unwrap();
                 let mut idx: i32 = 0;
                 match idx_val {
@@ -318,14 +326,169 @@ impl Stmt {
                     }
                 }
             }
-            Stmt::Exp(exp) => match exp {
+            NonIfStmt::Exp(exp) => match exp {
                 Some(some_exp) => {
                     let _exp_res = some_exp.generate_koopa_ir(buf, params);
                 }
                 None => {}
             },
-            Stmt::Block(block) => {
+            NonIfStmt::Block(block) => {
                 block.generate_koopa_ir(buf, params);
+            }
+        }
+    }
+}
+
+impl ClosedStmt {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        match self {
+            ClosedStmt::IfStmt(exp, closed_stmt1, closed_stmt2) => {
+                params.if_level += 1;
+                params.then_idx += 1;
+                params.else_idx += 1;
+                params.end_idx += 1;
+                let then_idx = params.then_idx;
+                let else_idx = params.else_idx;
+                let end_idx = params.end_idx;
+                let res = exp.generate_koopa_ir(buf, params);
+                // 插入条件跳转语句
+                match res {
+                    ExpResult::IntResult(int_num) => {
+                        writeln!(
+                            buf,
+                            "  br {}, %then{}, %else{}",
+                            int_num, then_idx, else_idx
+                        )
+                        .unwrap();
+                    }
+                    ExpResult::RegCount(reg) => {
+                        writeln!(
+                            buf,
+                            "  br %{}, %then{}, %else{}",
+                            reg - 1,
+                            then_idx,
+                            else_idx
+                        )
+                        .unwrap();
+                    }
+                }
+                let func_retuened = params.func_returned;
+                params.func_returned = false;
+                writeln!(buf, "%then{}:", then_idx).unwrap();
+                closed_stmt1.generate_koopa_ir(buf, params);
+                if params.func_returned == false {
+                    writeln!(buf, "  jump %end{}", end_idx).unwrap();
+                }
+                params.func_returned = false;
+                writeln!(buf, "%else{}:", else_idx).unwrap();
+                closed_stmt2.generate_koopa_ir(buf, params);
+                if params.func_returned == false {
+                    writeln!(buf, "  jump %end{}", end_idx).unwrap();
+                }
+                writeln!(buf, "%end{}:", end_idx).unwrap();
+                params.func_returned = func_retuened;
+                params.if_level -= 1;
+            }
+            ClosedStmt::NonIfStmt(non_if_stmt) => {
+                non_if_stmt.generate_koopa_ir(buf, params);
+            }
+        }
+    }
+}
+
+impl OpenStmt {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        match self {
+            OpenStmt::IfStmtNoElse(exp, stmt) => {
+                params.if_level += 1;
+                params.then_idx += 1;
+                params.else_idx += 1;
+                params.end_idx += 1;
+                let then_idx = params.end_idx;
+                // let else_idx = params.else_idx;
+                let end_idx = params.end_idx;
+                let res = exp.generate_koopa_ir(buf, params);
+                // 插入条件跳转语句
+                match res {
+                    ExpResult::IntResult(int_num) => {
+                        writeln!(buf, "  br {}, %then{}, %end{}", int_num, then_idx, end_idx)
+                            .unwrap();
+                    }
+                    ExpResult::RegCount(reg) => {
+                        writeln!(buf, "  br %{}, %then{}, %end{}", reg - 1, then_idx, end_idx)
+                            .unwrap();
+                    }
+                }
+                let func_returned = params.func_returned;
+                params.func_returned = false;
+                writeln!(buf, "%then{}:", then_idx).unwrap();
+                stmt.generate_koopa_ir(buf, params);
+                if params.func_returned == false {
+                    writeln!(buf, "  jump %end{}", end_idx).unwrap();
+                }
+                params.func_returned = func_returned;
+                writeln!(buf, "%end{}:", end_idx).unwrap();
+                params.if_level -= 1;
+            }
+            OpenStmt::IfStmtMitElse(exp, closed_stmt, open_stmt) => {
+                params.if_level += 1;
+                params.then_idx += 1;
+                params.else_idx += 1;
+                params.end_idx += 1;
+                let then_idx = params.then_idx;
+                let else_idx = params.else_idx;
+                let end_idx = params.end_idx;
+                let res = exp.generate_koopa_ir(buf, params);
+                // 插入条件跳转语句
+                match res {
+                    ExpResult::IntResult(int_num) => {
+                        writeln!(
+                            buf,
+                            "  br {}, %then{}, %else{}",
+                            int_num, then_idx, else_idx
+                        )
+                        .unwrap();
+                    }
+                    ExpResult::RegCount(reg) => {
+                        writeln!(
+                            buf,
+                            "  br %{}, %then{}, %else{}",
+                            reg - 1,
+                            then_idx,
+                            else_idx
+                        )
+                        .unwrap();
+                    }
+                }
+                let func_returned = params.func_returned;
+                params.func_returned = false;
+                writeln!(buf, "%then{}:", then_idx).unwrap();
+                closed_stmt.generate_koopa_ir(buf, params);
+                if params.func_returned == false {
+                    writeln!(buf, "  jump %end{}", end_idx).unwrap();
+                }
+                params.func_returned = func_returned;
+                writeln!(buf, "%else{}:", else_idx).unwrap();
+                open_stmt.generate_koopa_ir(buf, params);
+                if params.func_returned == false {
+                    writeln!(buf, "  jump %end{}", end_idx).unwrap();
+                }
+                params.func_returned = func_returned;
+                writeln!(buf, "%end{}:", end_idx).unwrap();
+                params.if_level -= 1;
+            }
+        }
+    }
+}
+
+impl Stmt {
+    pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
+        match self {
+            Stmt::ClosedStmt(closed_stmt) => {
+                closed_stmt.generate_koopa_ir(buf, params);
+            }
+            Stmt::OpenStmt(open_stmt) => {
+                open_stmt.generate_koopa_ir(buf, params);
             }
         }
     }

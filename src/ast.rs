@@ -33,13 +33,30 @@ pub enum BlockItem {
 
 
 #[derive(Debug)]
-pub enum Stmt {
+pub enum NonIfStmt {
     Return(Exp),
     Assgn(LVal, Exp),
     Exp(Option<Exp>),
     Block(Block),
 }
 
+#[derive(Debug)]
+pub enum Stmt {
+    OpenStmt(OpenStmt),
+    ClosedStmt(ClosedStmt),
+}
+
+#[derive(Debug)]
+pub enum OpenStmt {
+    IfStmtNoElse(Exp, Box<Stmt>),
+    IfStmtMitElse(Exp, ClosedStmt, Box<OpenStmt>),
+}
+
+#[derive(Debug)]
+pub enum ClosedStmt {
+    IfStmt(Exp, Box<ClosedStmt>, Box<ClosedStmt>),
+    NonIfStmt(NonIfStmt),
+}
 
 #[derive(Debug)]
 pub struct Exp {

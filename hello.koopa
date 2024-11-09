@@ -1,27 +1,62 @@
 fun @main(): i32 {
 %entry:
   @a_1 = alloc i32
-  store 1, @a_1
+  store 0, @a_1
+  @c_1 = alloc i32
+  store 1, @c_1
+  @d_1 = alloc i32
+  store 2, @d_1
   %0 = load @a_1
-  %1 = add %0, 2
-  store %1, @a_1
+  %1 = ne %0, 0
+  %2 = ne 0, 0
+  %3 = or %1, %2
+  br %3, %then1, %else1
+%then1:
+  store 3, @c_1
+  jump %end1
+%else1:
+  store 3, @d_1
   @a_2 = alloc i32
-  store 3, @a_2
-  %2 = load @a_2
-  %3 = add %2, 4
-  store %3, @a_2
-  @a_3 = alloc i32
-  @a_4 = alloc i32
-  @x_1 = alloc i32
-  store 5, @x_1
-  @x_2 = alloc i32
-  @x_3 = alloc i32
-  %4 = load @x_3
-  %5 = add %4, 7
-  @y_1 = alloc i32
-  store 5, @y_1
-  @x_4 = alloc i32
-  store 7, @x_4
-  @x_5 = alloc i32
-  ret 8
+  store 1, @a_2
+  %4 = load @a_2
+  %5 = ne %4, 0
+  %6 = ne 0, 0
+  %7 = or %5, %6
+  br %7, %then2, %else2
+%then2:
+  store 4, @c_1
+  jump %end2
+%else2:
+  store 4, @d_1
+  jump %end2
+%end2:
+  %8 = load @a_2
+  %9 = eq %8, 0
+  br %9, %then3, %else3
+%then3:
+  ret 1
+%else3:
+  %10 = load @a_2
+  %11 = eq %10, 0
+  %12 = load @a_2
+  %13 = sub 0, 1
+  %14 = eq %12, %13
+  %15 = ne %11, 0
+  %16 = ne %14, 0
+  %17 = and %15, %16
+  br %17, %then4, %end4
+%then4:
+  ret 2
+%end4:
+  jump %end3
+%end3:
+  jump %end1
+%end1:
+  %18 = load @d_1
+  %19 = load @c_1
+  %20 = load @a_1
+  %21 = add %20, 0
+  %22 = add %21, %19
+  %23 = add %22, %18
+  ret %23
 }

@@ -1,50 +1,19 @@
 int main() {
-  int a = 1;
-  {
-    a = a + 2;
-    int a = 3;
-    a = a + 4;
-    {
-      int a;
-      {
-        int a;
-        {
-          {
-            const int x = 7;
-            {
-              {
-                int x = 5;
-
-                {
-                  {
-                    int x;
-                    int x;
-                    x + 7;
-                    ;
-                  }
-                  int y = 5;
-                  int x = 7;
-                  const int x = 8;
-                  {
-                    int x;
-                    // return x;
-                  }
-                  {
-                    // int x;
-                    return x;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+  int a = 0;
+  const int b = 1 - 1 * 2 + 1;
+  int c = 1, d = 2;
+  if (a || b) {
+    c = 3;
+  } else {
+    d = 3;
+    int a = 1;
+    if (a || b) {
+      c = 4;
+    } else {
+      d = 4;
     }
+    if (a == 0) return 1;
+    else if (a == 0 && a == -1) return 2;
   }
-  a = a + 5;
-  {
-    int a;
-    return a;
-  }
-  return a;
+  return a + b + c + d;
 }

@@ -24,9 +24,25 @@ autotest -koopa -s lv3 /root/compiler
 如果放的是%n, 实际上是一个Value, 否则可以在dfg中找到.
 
 ```
-docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -riscv -s lv4 /root/compiler
+docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -riscv -s lv5 /root/compiler
 ```
 
 ```
-docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -koopa -s lv5 /root/compiler
+docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -koopa -s lv6 /root/compiler
 ```
+
+## Dangling-else 的解决方法
+
+```
+Stmt ::= if Exp Stmt [else Stmt] | ...
+```
+
+转化为
+
+```
+Stmt ::= OpenStmt | ClosedStmt
+ClosedStmt ::= if Exp ClosedStmt else ClosedStmt | NonIfStmt
+OpenStmt ::= if Exp Stmt | if Exp ClosedStmt else OpenStmt
+NonIfStmt ::= Resturn | Assgn | Exp | Block
+```
+

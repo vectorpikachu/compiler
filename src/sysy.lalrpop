@@ -7,12 +7,15 @@ match {
   r"\s*" => {}, // 空白符
   r"//[^\n\r]*[\n\r]*" => {}, // 注释
   r"\/\*([^\*]|\*+[^\/\*])*\*+\/" => {}, // 多行注释
+  "if", // get full precedence
+  "else",
+  "return",
   "<=",
   ">=",
   "!=",
   "==",
   "&&",
-  "||"
+  "||",
 } else {
   _ // 剩下的情况
 }
@@ -35,11 +38,26 @@ BlockItem: BlockItem = {
 }
 
 Stmt: Stmt = {
-  "return" <exp: Exp> ";" => Stmt::Return(exp),
-  <l_val: LVal> "=" <exp: Exp> ";" => Stmt::Assgn(l_val, exp),
-  <block: Block> => Stmt::Block(block),
-  ";" => Stmt::Exp(None),
-  <exp: Exp> ";" => Stmt::Exp(Some(exp)),
+  <closed_stmt: ClosedStmt> => Stmt::ClosedStmt(closed_stmt),
+  <open_stmt: OpenStmt> => Stmt::OpenStmt(open_stmt),
+}
+
+ClosedStmt: ClosedStmt = {
+  "if" "(" <exp: Exp> ")" <closed_stmt1: ClosedStmt> "else" <closed_stmt2: ClosedStmt> => ClosedStmt::IfStmt(exp, Box::new(closed_stmt1), Box::new(closed_stmt2)),
+  <non_if_stmt: NonIfStmt> => ClosedStmt::NonIfStmt(non_if_stmt),
+}
+
+OpenStmt: OpenStmt = {
+  "if" "(" <exp: Exp> ")" <closed_stmt: ClosedStmt> "else" <open_stmt: OpenStmt> => OpenStmt::IfStmtMitElse(exp, closed_stmt, Box::new(open_stmt)),
+  "if" "(" <exp: Exp> ")" <stmt: Stmt> => OpenStmt::IfStmtNoElse(exp, Box::new(stmt)),
+}
+
+NonIfStmt: NonIfStmt = {
+  "return" <exp: Exp> ";" => NonIfStmt::Return(exp),
+  <l_val: LVal> "=" <exp: Exp> ";" => NonIfStmt::Assgn(l_val, exp),
+  <block: Block> => NonIfStmt::Block(block),
+  ";" => NonIfStmt::Exp(None),
+  <exp: Exp> ";" => NonIfStmt::Exp(Some(exp)),
 };
 
 
@@ -126,10 +144,6 @@ LOrExp : LOrExp = {
     LOrExp::LOrExp(Box::new(l_or_exp), l_or_op, l_and_exp),
 }
 
-// 如果匹配到标识符, 就返回这个字符串
-// 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
-// 关于尖括号到底代表什么, 请 RTFM
-Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
 
 Number: Number = <int_const: INT_CONST> => Number::IntConst(int_const);
 
@@ -175,3 +189,7 @@ INT_CONST: i32 = {
   r"0[xX][0-9a-fA-F]+" => i32::from_str_radix(&<>[2..], 16).unwrap(),
 }
 
+// 如果匹配到标识符, 就返回这个字符串
+// 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
+// 关于尖括号到底代表什么, 请 RTFM
+Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
