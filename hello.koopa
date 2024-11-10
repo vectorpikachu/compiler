@@ -8,9 +8,20 @@ fun @main(): i32 {
   store 2, @d_1
   %0 = load @a_1
   %1 = ne %0, 0
+  br %1, %then1, %false_branch2
+%false_branch2:
   %2 = ne 0, 0
-  %3 = or %1, %2
-  br %3, %then1, %else1
+  %3 = ne %2, 0
+  br %3, %then1, %false_branch1
+%false_branch1:
+  %4 = load @c_1
+  %5 = ne %4, 0
+  br %5, %true_branch3, %else1
+%true_branch3:
+  %6 = load @d_1
+  %7 = ne %6, 0
+  %8 = ne %7, 0
+  br %8, %then1, %else1
 %then1:
   store 3, @c_1
   jump %end1
@@ -18,11 +29,12 @@ fun @main(): i32 {
   store 3, @d_1
   @a_2 = alloc i32
   store 1, @a_2
-  %4 = load @a_2
-  %5 = ne %4, 0
-  %6 = ne 0, 0
-  %7 = or %5, %6
-  br %7, %then2, %else2
+  %9 = load @a_2
+  %10 = ne %9, 0
+  br %10, %then2, %false_branch4
+%false_branch4:
+  %11 = ne 0, 0
+  br %11, %then2, %else2
 %then2:
   store 4, @c_1
   jump %end2
@@ -30,21 +42,22 @@ fun @main(): i32 {
   store 4, @d_1
   jump %end2
 %end2:
-  %8 = load @a_2
-  %9 = eq %8, 0
-  br %9, %then3, %else3
+  %12 = load @a_2
+  %13 = eq %12, 0
+  br %13, %then3, %else3
 %then3:
   ret 1
 %else3:
-  %10 = load @a_2
-  %11 = eq %10, 0
-  %12 = load @a_2
-  %13 = sub 0, 1
-  %14 = eq %12, %13
-  %15 = ne %11, 0
-  %16 = ne %14, 0
-  %17 = and %15, %16
-  br %17, %then4, %end4
+  %14 = load @a_2
+  %15 = eq %14, 0
+  %16 = ne %15, 0
+  br %16, %true_branch5, %end4
+%true_branch5:
+  %17 = load @a_2
+  %18 = sub 0, 1
+  %19 = eq %17, %18
+  %20 = ne %19, 0
+  br %20, %then4, %end4
 %then4:
   ret 2
 %end4:
@@ -52,11 +65,11 @@ fun @main(): i32 {
 %end3:
   jump %end1
 %end1:
-  %18 = load @d_1
-  %19 = load @c_1
-  %20 = load @a_1
-  %21 = add %20, 0
-  %22 = add %21, %19
-  %23 = add %22, %18
-  ret %23
+  %21 = load @d_1
+  %22 = load @c_1
+  %23 = load @a_1
+  %24 = add %23, 0
+  %25 = add %24, %22
+  %26 = add %25, %21
+  ret %26
 }

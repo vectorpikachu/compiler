@@ -15,6 +15,8 @@ pub struct GenerateIRParams {
     pub else_idx: i32,
     pub then_idx: i32,
     pub end_idx: i32,
+    pub eval_idx: i32, // 短路求值的序号
+    pub end_else: i32, // 是end还是else
 }
 
 #[derive(Clone)]
@@ -138,6 +140,8 @@ impl CompUnit {
             else_idx: 0,
             then_idx: 0,
             end_idx: 0,
+            eval_idx: 0,
+            end_else: 0,
         };
         self.func_def.generate_koopa_ir(buf, &mut params);
     }
@@ -350,7 +354,9 @@ impl ClosedStmt {
                 let then_idx = params.then_idx;
                 let else_idx = params.else_idx;
                 let end_idx = params.end_idx;
-                let res = exp.generate_koopa_ir(buf, params);
+                // 为exp写一个短路求值
+                params.end_else = 0; // 是else
+                let res = exp.short_circuit_eval(buf, params);
                 // 插入条件跳转语句
                 match res {
                     ExpResult::IntResult(int_num) => {
@@ -407,7 +413,8 @@ impl OpenStmt {
                 let then_idx = params.end_idx;
                 // let else_idx = params.else_idx;
                 let end_idx = params.end_idx;
-                let res = exp.generate_koopa_ir(buf, params);
+                params.end_else = 1; // 是end
+                let res = exp.short_circuit_eval(buf, params);
                 // 插入条件跳转语句
                 match res {
                     ExpResult::IntResult(int_num) => {
@@ -435,10 +442,11 @@ impl OpenStmt {
                 params.then_idx += 1;
                 params.else_idx += 1;
                 params.end_idx += 1;
+                params.end_else = 0; // 是else
+                let res = exp.short_circuit_eval(buf, params);
                 let then_idx = params.then_idx;
                 let else_idx = params.else_idx;
                 let end_idx = params.end_idx;
-                let res = exp.generate_koopa_ir(buf, params);
                 // 插入条件跳转语句
                 match res {
                     ExpResult::IntResult(int_num) => {
@@ -500,6 +508,13 @@ impl Exp {
     }
     pub fn calc_const(&self, params: &mut GenerateIRParams) -> i32 {
         return self.l_or_exp.calc_const(params);
+    }
+    pub fn short_circuit_eval(
+        &self,
+        buf: &mut Vec<u8>,
+        params: &mut GenerateIRParams,
+    ) -> ExpResult {
+        return self.l_or_exp.short_circuit_eval(buf, params);
     }
 }
 
@@ -957,6 +972,60 @@ impl LAndExp {
             }
         }
     }
+
+    pub fn short_circuit_eval(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
+        match self {
+            LAndExp::EqExp(eq_exp) => {
+                return eq_exp.generate_koopa_ir(buf, params);
+            }
+            LAndExp::LAndExp(l_and_exp, _l_and_op, eq_exp) => {
+                params.eval_idx += 1;
+                let eval_idx = params.eval_idx;
+                let l_and_exp_res = l_and_exp.short_circuit_eval(buf, params);
+
+                match l_and_exp_res {
+                    ExpResult::RegCount(reg_count) => {
+                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, reg_count - 1)
+                            .unwrap();
+                    }
+                    ExpResult::IntResult(int_res) => {
+                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, int_res).unwrap();
+                    }
+                }
+                params.var_count = params.var_count + 1;
+
+                let jump_dest = if params.end_else == 0 {"else"} else {"end"};
+
+                // 实现跳转
+                writeln!(
+                    buf,
+                    "  br %{}, %true_branch{}, %{}{}",
+                    params.var_count - 1,
+                    eval_idx,
+                    jump_dest,
+                    params.end_idx
+                )
+                .unwrap();
+
+                writeln!(buf, "%true_branch{}:", eval_idx).unwrap();
+
+                let eq_exp_res = eq_exp.generate_koopa_ir(buf, params);
+
+                match eq_exp_res {
+                    ExpResult::RegCount(reg_count) => {
+                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, reg_count - 1)
+                            .unwrap();
+                    }
+                    ExpResult::IntResult(int_res) => {
+                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, int_res).unwrap();
+                    }
+                }
+                params.var_count += 1;
+
+                return ExpResult::RegCount(params.var_count);
+            }
+        }
+    }
 }
 
 impl LOrExp {
@@ -1029,6 +1098,60 @@ impl LOrExp {
                         };
                     }
                 }
+            }
+        }
+    }
+
+    pub fn short_circuit_eval(
+        &self,
+        buf: &mut Vec<u8>,
+        params: &mut GenerateIRParams,
+    ) -> ExpResult {
+        match self {
+            LOrExp::LAndExp(l_and_exp) => {
+                return l_and_exp.short_circuit_eval(buf, params);
+            }
+            LOrExp::LOrExp(l_or_exp, _l_or_op, l_and_exp) => {
+                params.eval_idx += 1;
+                let eval_idx = params.eval_idx;
+                let l_or_exp_res = l_or_exp.short_circuit_eval(buf, params);
+
+                match l_or_exp_res {
+                    ExpResult::RegCount(reg_count) => {
+                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, reg_count - 1)
+                            .unwrap();
+                    }
+                    ExpResult::IntResult(int_res) => {
+                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, int_res).unwrap();
+                    }
+                }
+                params.var_count = params.var_count + 1;
+
+                // 实现跳转
+                writeln!(
+                    buf,
+                    "  br %{}, %then{}, %false_branch{}",
+                    params.var_count - 1,
+                    params.then_idx,
+                    eval_idx
+                )
+                .unwrap();
+
+                writeln!(buf, "%false_branch{}:", eval_idx).unwrap();
+                let l_and_exp_res = l_and_exp.short_circuit_eval(buf, params);
+
+                match l_and_exp_res {
+                    ExpResult::RegCount(reg_count) => {
+                        writeln!(buf, "  %{} = ne %{}, 0", params.var_count, reg_count - 1)
+                            .unwrap();
+                    }
+                    ExpResult::IntResult(int_res) => {
+                        writeln!(buf, "  %{} = ne {}, 0", params.var_count, int_res).unwrap();
+                    }
+                }
+                params.var_count += 1;
+
+                return ExpResult::RegCount(params.var_count);
             }
         }
     }
