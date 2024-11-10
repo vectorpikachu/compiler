@@ -16,7 +16,8 @@ pub struct GenerateIRParams {
     pub then_idx: i32,
     pub end_idx: i32,
     pub eval_idx: i32, // 短路求值的序号
-    pub end_else: i32, // 是end还是else
+    pub jump_true_branch: i32, // 短路要跳转的地方
+    pub jump_false_branch: i32,
 }
 
 #[derive(Clone)]
@@ -141,7 +142,8 @@ impl CompUnit {
             then_idx: 0,
             end_idx: 0,
             eval_idx: 0,
-            end_else: 0,
+            jump_false_branch: 0,
+            jump_true_branch: 0,
         };
         self.func_def.generate_koopa_ir(buf, &mut params);
     }
@@ -355,7 +357,10 @@ impl ClosedStmt {
                 let else_idx = params.else_idx;
                 let end_idx = params.end_idx;
                 // 为exp写一个短路求值
-                params.end_else = 0; // 是else
+                // then - -1, else - -2, end - -3, branch - eval_idx
+                // 代表exp求值为false和true要跳转的地方
+                params.jump_false_branch = -2; // 是else
+                params.jump_true_branch = -1; // 是then 
                 let res = exp.short_circuit_eval(buf, params);
                 // 插入条件跳转语句
                 match res {
@@ -413,7 +418,10 @@ impl OpenStmt {
                 let then_idx = params.end_idx;
                 // let else_idx = params.else_idx;
                 let end_idx = params.end_idx;
-                params.end_else = 1; // 是end
+                // then - -1, else - -2, end - -3, branch - eval_idx
+                // 代表exp求值为false和true要跳转的地方
+                params.jump_false_branch = -3; // 是end
+                params.jump_true_branch = -1; // 是then 
                 let res = exp.short_circuit_eval(buf, params);
                 // 插入条件跳转语句
                 match res {
@@ -442,7 +450,10 @@ impl OpenStmt {
                 params.then_idx += 1;
                 params.else_idx += 1;
                 params.end_idx += 1;
-                params.end_else = 0; // 是else
+                // then - -1, else - -2, end - -3, branch - eval_idx
+                // 代表exp求值为false和true要跳转的地方
+                params.jump_false_branch = -2; // 是else
+                params.jump_true_branch = -1; // 是then 
                 let res = exp.short_circuit_eval(buf, params);
                 let then_idx = params.then_idx;
                 let else_idx = params.else_idx;
@@ -981,6 +992,11 @@ impl LAndExp {
             LAndExp::LAndExp(l_and_exp, _l_and_op, eq_exp) => {
                 params.eval_idx += 1;
                 let eval_idx = params.eval_idx;
+                let jump_false_branch = params.jump_false_branch;
+                let jump_true_branch = params.jump_true_branch;
+                // and求值为假到下一个 || 的右边
+                
+                params.jump_true_branch = eval_idx; // 否则就求右边
                 let l_and_exp_res = l_and_exp.short_circuit_eval(buf, params);
 
                 match l_and_exp_res {
@@ -994,21 +1010,49 @@ impl LAndExp {
                 }
                 params.var_count = params.var_count + 1;
 
-                let jump_dest = if params.end_else == 0 {"else"} else {"end"};
+                let jump_false_dest = match params.jump_false_branch {
+                    -1 => "then",
+                    -2 => "else",
+                    -3 => "end",
+                    _ => "short_circuit", 
+                };
+                let jump_false_idx = match params.jump_false_branch {
+                    -1 => params.then_idx,
+                    -2 => params.else_idx,
+                    -3 => params.end_idx,
+                    idx => idx,
+                };
+
+                let jump_true_dest = match params.jump_true_branch {
+                    -1 => "then",
+                    -2 => "else",
+                    -3 => "end",
+                    _ => "short_circuit", 
+                };
+                let jump_true_idx = match params.jump_true_branch {
+                    -1 => params.then_idx,
+                    -2 => params.else_idx,
+                    -3 => params.end_idx,
+                    idx => idx,
+                };
 
                 // 实现跳转
                 writeln!(
                     buf,
-                    "  br %{}, %true_branch{}, %{}{}",
+                    "  br %{}, %{}{}, %{}{}",
                     params.var_count - 1,
-                    eval_idx,
-                    jump_dest,
-                    params.end_idx
+                    jump_true_dest,
+                    jump_true_idx,
+                    jump_false_dest,
+                    jump_false_idx
                 )
                 .unwrap();
 
-                writeln!(buf, "%true_branch{}:", eval_idx).unwrap();
+                writeln!(buf, "%short_circuit{}:", jump_true_idx).unwrap();
 
+                params.jump_false_branch = jump_false_branch;
+                params.jump_true_branch = jump_true_branch;
+                
                 let eq_exp_res = eq_exp.generate_koopa_ir(buf, params);
 
                 match eq_exp_res {
@@ -1114,6 +1158,12 @@ impl LOrExp {
             LOrExp::LOrExp(l_or_exp, _l_or_op, l_and_exp) => {
                 params.eval_idx += 1;
                 let eval_idx = params.eval_idx;
+
+                let jump_true_branch = params.jump_true_branch;
+                let jump_false_branch = params.jump_false_branch;
+
+                params.jump_false_branch = eval_idx;
+
                 let l_or_exp_res = l_or_exp.short_circuit_eval(buf, params);
 
                 match l_or_exp_res {
@@ -1127,17 +1177,49 @@ impl LOrExp {
                 }
                 params.var_count = params.var_count + 1;
 
+                let jump_false_dest = match params.jump_false_branch {
+                    -1 => "then",
+                    -2 => "else",
+                    -3 => "end",
+                    _ => "short_circuit", 
+                };
+                let jump_false_idx = match params.jump_false_branch {
+                    -1 => params.then_idx,
+                    -2 => params.else_idx,
+                    -3 => params.end_idx,
+                    idx => idx,
+                };
+
+                let jump_true_dest = match params.jump_true_branch {
+                    -1 => "then",
+                    -2 => "else",
+                    -3 => "end",
+                    _ => "short_circuit", 
+                };
+                let jump_true_idx = match params.jump_true_branch {
+                    -1 => params.then_idx,
+                    -2 => params.else_idx,
+                    -3 => params.end_idx,
+                    idx => idx,
+                };
+
                 // 实现跳转
                 writeln!(
                     buf,
-                    "  br %{}, %then{}, %false_branch{}",
+                    "  br %{}, %{}{}, %{}{}",
                     params.var_count - 1,
-                    params.then_idx,
-                    eval_idx
+                    jump_true_dest,
+                    jump_true_idx,
+                    jump_false_dest,
+                    jump_false_idx
                 )
                 .unwrap();
 
-                writeln!(buf, "%false_branch{}:", eval_idx).unwrap();
+                writeln!(buf, "%short_circuit{}:", jump_false_idx).unwrap();
+
+                params.jump_false_branch = jump_false_branch;
+                params.jump_true_branch = jump_true_branch;
+                
                 let l_and_exp_res = l_and_exp.short_circuit_eval(buf, params);
 
                 match l_and_exp_res {
