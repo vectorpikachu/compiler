@@ -56,6 +56,7 @@ impl GenerateAsm for koopa::ir::Program {
     }
 }
 
+// TODO: Refactor this. It's too ugly.
 impl GenerateAsm for koopa::ir::FunctionData {
     fn generate_asm(&self, buf: &mut Vec<u8>, params: &mut GenerateAsmParams) {
         // 首先提供函数入口
@@ -285,11 +286,9 @@ impl GenerateAsm for koopa::ir::FunctionData {
                                                      .replace("%", "");
                         match cond_val.kind() {
                             ValueKind::Integer(i) => {
-                                if i.value() != 0 {
-                                    writeln!(buf, "  j {}", true_name).unwrap();
-                                } else {
-                                    writeln!(buf, "  j {}", false_name).unwrap();
-                                }
+                                writeln!(buf, "  li t0, {}", i.value()).unwrap();
+                                writeln!(buf, "  bnez t0, {}", true_name).unwrap();
+                                writeln!(buf, "  j {}", false_name).unwrap();
                                 continue;
                             }
                             _ => {
