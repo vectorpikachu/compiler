@@ -227,6 +227,7 @@ short_circuit9:
   j end2
 then3:
   li a0, 5
+  addi sp, sp, 352
   ret
 short_circuit13:
   lw t0, 4(sp)
@@ -274,6 +275,7 @@ short_circuit4:
   j short_circuit3
 then2:
   li a0, 0
+  addi sp, sp, 352
   ret
 short_circuit12:
   lw t0, 4(sp)
@@ -365,19 +367,18 @@ then4:
   sw t1, 300(sp)
   lw t0, 300(sp)
   sw t0, 60(sp)
-  j end4
+  lw t0, 60(sp)
+  sw t0, 304(sp)
+  lw a0, 304(sp)
+  addi sp, sp, 352
+  ret
 short_circuit17:
   lw t0, 64(sp)
-  sw t0, 304(sp)
-  lw t0, 304(sp)
+  sw t0, 308(sp)
+  lw t0, 308(sp)
   li t1, 7
   sub t1, t0, t1
   seqz t1, t1
-  sw t1, 308(sp)
-  lw t0, 308(sp)
-  li t1, 0
-  sub t1, t0, t1
-  snez t1, t1
   sw t1, 312(sp)
   lw t0, 312(sp)
   li t1, 0
@@ -385,34 +386,40 @@ short_circuit17:
   snez t1, t1
   sw t1, 316(sp)
   lw t0, 316(sp)
+  li t1, 0
+  sub t1, t0, t1
+  snez t1, t1
+  sw t1, 320(sp)
+  lw t0, 320(sp)
   bnez t0, then4
   j short_circuit16
 short_circuit1:
   lw t0, 0(sp)
-  sw t0, 320(sp)
-  lw t0, 4(sp)
   sw t0, 324(sp)
-  lw t0, 324(sp)
-  lw t1, 320(sp)
-  sub t1, t0, t1
-  sw t1, 328(sp)
+  lw t0, 4(sp)
+  sw t0, 328(sp)
   lw t0, 328(sp)
-  li t1, 0
+  lw t1, 324(sp)
   sub t1, t0, t1
-  snez t1, t1
   sw t1, 332(sp)
   lw t0, 332(sp)
-  bnez t0, then1
-  j end1
-end4:
-  li a0, 77
-  ret
-short_circuit16:
-  li t0, 6
   li t1, 0
   sub t1, t0, t1
   snez t1, t1
   sw t1, 336(sp)
   lw t0, 336(sp)
+  bnez t0, then1
+  j end1
+short_circuit16:
+  li t0, 6
+  li t1, 0
+  sub t1, t0, t1
+  snez t1, t1
+  sw t1, 340(sp)
+  lw t0, 340(sp)
   bnez t0, then4
   j end4
+end4:
+  li a0, 77
+  addi sp, sp, 352
+  ret

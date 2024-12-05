@@ -141,7 +141,8 @@ fun @main(): i32 {
   %78 = load @c_1
   %79 = add %78, 5
   store %79, @c_1
-  jump %end4
+  %80 = load @c_1
+  ret %80
 %end4:
   ret 77
 }

@@ -16,6 +16,7 @@ int main() {
   const int z = 6;
   if (z == 6 || d == 7 || z) {
     c = c + 5;
+    return c;
   }
   return 77;
 }

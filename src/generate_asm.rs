@@ -110,31 +110,17 @@ impl GenerateAsm for koopa::ir::FunctionData {
                             _ => {
                                 let delta = * params.stack_state.get(&ret_value_data).unwrap();
                                 load_and_save("lw".to_string(), 7, delta, buf);
-                                if params.stack_bytes > 0 {
-                                    if params.stack_bytes <= 2048 {
-                                        writeln!(buf, "  addi sp, sp, {}", params.stack_bytes).unwrap();
-                                    } else {
-                                        writeln!(buf, "  li t0, {}", params.stack_bytes).unwrap();
-                                        writeln!(buf, "  add sp, sp, t0").unwrap();
-                                    }
-                                }
                             }
                         }
-                        //let reg = params.register_data.get(&ret_value_data);
-                        //match reg {
-                        //    Some(reg_idx) => {
-                        //        let reg_str = register_idx_to_name(*reg_idx);
-                        //        writeln!(buf, "  mv a0, {}", reg_str).unwrap();
-                        //    }
-                        //    None => {
-                        //        match self.dfg().value(ret_value_data).kind() {
-                        //            ValueKind::Integer(int_num) => {
-                        //                writeln!(buf, "  li a0, {}", int_num.value()).unwrap();
-                        //            }
-                        //            _ => {}
-                        //        }
-                        //    }
-                        //}
+                        if params.stack_bytes > 0 {
+                            if params.stack_bytes <= 2048 {
+                                writeln!(buf, "  addi sp, sp, {}", params.stack_bytes).unwrap();
+                            } else {
+                                writeln!(buf, "  li t0, {}", params.stack_bytes).unwrap();
+                                writeln!(buf, "  add sp, sp, t0").unwrap();
+                            }
+                        }
+                        
                         writeln!(buf, "  ret").unwrap();
                     }
                     ValueKind::Binary(bin) => {
@@ -286,9 +272,11 @@ impl GenerateAsm for koopa::ir::FunctionData {
                                                      .replace("%", "");
                         match cond_val.kind() {
                             ValueKind::Integer(i) => {
-                                writeln!(buf, "  li t0, {}", i.value()).unwrap();
-                                writeln!(buf, "  bnez t0, {}", true_name).unwrap();
-                                writeln!(buf, "  j {}", false_name).unwrap();
+                                if i.value() != 0 {
+                                    writeln!(buf, "  j {}", true_name).unwrap();
+                                } else {
+                                    writeln!(buf, "  j {}", false_name).unwrap();
+                                }
                                 continue;
                             }
                             _ => {
