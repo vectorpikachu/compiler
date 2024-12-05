@@ -24,7 +24,7 @@ autotest -koopa -s lv3 /root/compiler
 如果放的是%n, 实际上是一个Value, 否则可以在dfg中找到.
 
 ```
-docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -riscv -s lv5 /root/compiler
+docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -riscv -s lv6 /root/compiler
 ```
 
 ```

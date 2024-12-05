@@ -86,8 +86,10 @@ impl GenerateAsm for koopa::ir::FunctionData {
         }
         // ...
         // 访问基本块
-        for (&_bb, node) in self.layout().bbs() {
+        for (&bb, node) in self.layout().bbs() {
             // 访问指令列表
+            let bb_name = self.dfg().bb(bb).name().as_ref().unwrap().replace("%", "");
+            writeln!(buf, "{}:", bb_name).unwrap();
             for &inst in node.insts().keys() {
                 let inst_data = self.dfg().value(inst);
                 // value_data 是 &ValueData 类型
@@ -270,6 +272,42 @@ impl GenerateAsm for koopa::ir::FunctionData {
                         load_and_save("lw".to_string(), 0, delta, buf);
                         let delta = * params.stack_state.get(&inst).unwrap();
                         load_and_save("sw".to_string(), 0, delta, buf);
+                    }
+                    ValueKind::Branch(branch) => {
+                        let cond = branch.cond();
+                        let true_dst = branch.true_bb();
+                        let false_dst = branch.false_bb();
+                        let cond_val = self.dfg().value(cond);
+                        let cond_str: String;
+                        let true_name = self.dfg().bb(true_dst).name().as_ref().unwrap()
+                                                    .replace("%", "");
+                        let false_name = self.dfg().bb(false_dst).name().as_ref().unwrap()
+                                                     .replace("%", "");
+                        match cond_val.kind() {
+                            ValueKind::Integer(i) => {
+                                if i.value() != 0 {
+                                    writeln!(buf, "  j {}", true_name).unwrap();
+                                } else {
+                                    writeln!(buf, "  j {}", false_name).unwrap();
+                                }
+                                continue;
+                            }
+                            _ => {
+                                let delta = * params.stack_state.get(&cond).unwrap();
+                                load_and_save("lw".to_string(), 0, delta, buf);
+                                cond_str = register_idx_to_name(0);
+                            }
+                        }
+                        // 去掉名字里的%号
+                        
+                        writeln!(buf, "  bnez {}, {}", cond_str, true_name).unwrap();
+                        writeln!(buf, "  j {}", false_name).unwrap();
+                    }
+                    ValueKind::Jump(jump) => {
+                        let target = jump.target();
+                        let target_name = self.dfg().bb(target).name().as_ref().unwrap()
+                                                      .replace("%", "");
+                        writeln!(buf, "  j {}", target_name).unwrap();
                     }
                     _ => unreachable!(),
                 }
