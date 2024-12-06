@@ -41,8 +41,8 @@ Stmt ::= if Exp Stmt [else Stmt] | ...
 
 ```
 Stmt ::= OpenStmt | ClosedStmt
-ClosedStmt ::= if Exp ClosedStmt else ClosedStmt | NonIfStmt
+ClosedStmt ::= if Exp ClosedStmt else ClosedStmt | BasicStmt
 OpenStmt ::= if Exp Stmt | if Exp ClosedStmt else OpenStmt
-NonIfStmt ::= Resturn | Assgn | Exp | Block
+BasicStmt ::= Resturn | Assgn | Exp | Block
 ```
 

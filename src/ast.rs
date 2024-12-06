@@ -33,7 +33,7 @@ pub enum BlockItem {
 
 
 #[derive(Debug)]
-pub enum NonIfStmt {
+pub enum BasicStmt {
     Return(Exp),
     Assgn(LVal, Exp),
     Exp(Option<Exp>),
@@ -50,12 +50,14 @@ pub enum Stmt {
 pub enum OpenStmt {
     IfStmtNoElse(Exp, Box<Stmt>),
     IfStmtMitElse(Exp, ClosedStmt, Box<OpenStmt>),
+    WhileStmt(Exp, Box<OpenStmt>),
 }
 
 #[derive(Debug)]
 pub enum ClosedStmt {
     IfStmt(Exp, Box<ClosedStmt>, Box<ClosedStmt>),
-    NonIfStmt(NonIfStmt),
+    WhileStmt(Exp, Box<ClosedStmt>),
+    BasicStmt(BasicStmt),
 }
 
 #[derive(Debug)]

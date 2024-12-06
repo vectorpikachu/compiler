@@ -44,20 +44,22 @@ Stmt: Stmt = {
 
 ClosedStmt: ClosedStmt = {
   "if" "(" <exp: Exp> ")" <closed_stmt1: ClosedStmt> "else" <closed_stmt2: ClosedStmt> => ClosedStmt::IfStmt(exp, Box::new(closed_stmt1), Box::new(closed_stmt2)),
-  <non_if_stmt: NonIfStmt> => ClosedStmt::NonIfStmt(non_if_stmt),
+  <non_if_stmt: BasicStmt> => ClosedStmt::BasicStmt(non_if_stmt),
+  "while" "(" <exp: Exp> ")" <closed_stmt: ClosedStmt> => ClosedStmt::WhileStmt(exp, Box::new(closed_stmt)),
 }
 
 OpenStmt: OpenStmt = {
   "if" "(" <exp: Exp> ")" <closed_stmt: ClosedStmt> "else" <open_stmt: OpenStmt> => OpenStmt::IfStmtMitElse(exp, closed_stmt, Box::new(open_stmt)),
   "if" "(" <exp: Exp> ")" <stmt: Stmt> => OpenStmt::IfStmtNoElse(exp, Box::new(stmt)),
+  "while" "(" <exp: Exp> ")" <open_stmt: OpenStmt> => OpenStmt::WhileStmt(exp, Box::new(open_stmt)),
 }
 
-NonIfStmt: NonIfStmt = {
-  "return" <exp: Exp> ";" => NonIfStmt::Return(exp),
-  <l_val: LVal> "=" <exp: Exp> ";" => NonIfStmt::Assgn(l_val, exp),
-  <block: Block> => NonIfStmt::Block(block),
-  ";" => NonIfStmt::Exp(None),
-  <exp: Exp> ";" => NonIfStmt::Exp(Some(exp)),
+BasicStmt: BasicStmt = {
+  "return" <exp: Exp> ";" => BasicStmt::Return(exp),
+  <l_val: LVal> "=" <exp: Exp> ";" => BasicStmt::Assgn(l_val, exp),
+  <block: Block> => BasicStmt::Block(block),
+  ";" => BasicStmt::Exp(None),
+  <exp: Exp> ";" => BasicStmt::Exp(Some(exp)),
 };
 
 

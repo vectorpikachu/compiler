@@ -15,9 +15,10 @@ pub struct GenerateIRParams {
     pub else_idx: i32,
     pub then_idx: i32,
     pub end_idx: i32,
-    pub eval_idx: i32, // 短路求值的序号
+    pub eval_idx: i32,         // 短路求值的序号
     pub jump_true_branch: i32, // 短路要跳转的地方
     pub jump_false_branch: i32,
+    pub while_idx: i32,
 }
 
 #[derive(Clone)]
@@ -144,6 +145,7 @@ impl CompUnit {
             eval_idx: 0,
             jump_false_branch: 0,
             jump_true_branch: 0,
+            while_idx: 0,
         };
         self.func_def.generate_koopa_ir(buf, &mut params);
     }
@@ -297,10 +299,10 @@ impl InitVal {
     }
 }
 
-impl NonIfStmt {
+impl BasicStmt {
     pub fn generate_koopa_ir(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) {
         match self {
-            NonIfStmt::Return(exp) => {
+            BasicStmt::Return(exp) => {
                 let exp_res = exp.generate_koopa_ir(buf, params);
                 match exp_res {
                     ExpResult::RegCount(reg_count) => {
@@ -312,7 +314,7 @@ impl NonIfStmt {
                 }
                 params.func_returned = true;
             }
-            NonIfStmt::Assgn(l_val, exp) => {
+            BasicStmt::Assgn(l_val, exp) => {
                 let idx_val = params.sym_tab.query(l_val.ident.clone()).unwrap();
                 let mut idx: i32 = 0;
                 match idx_val {
@@ -332,13 +334,13 @@ impl NonIfStmt {
                     }
                 }
             }
-            NonIfStmt::Exp(exp) => match exp {
+            BasicStmt::Exp(exp) => match exp {
                 Some(some_exp) => {
                     let _exp_res = some_exp.generate_koopa_ir(buf, params);
                 }
                 None => {}
             },
-            NonIfStmt::Block(block) => {
+            BasicStmt::Block(block) => {
                 block.generate_koopa_ir(buf, params);
             }
         }
@@ -360,7 +362,7 @@ impl ClosedStmt {
                 // then - -1, else - -2, end - -3, branch - eval_idx
                 // 代表exp求值为false和true要跳转的地方
                 params.jump_false_branch = -2; // 是else
-                params.jump_true_branch = -1; // 是then 
+                params.jump_true_branch = -1; // 是then
                 let res = exp.short_circuit_eval(buf, params);
                 // 插入条件跳转语句
                 match res {
@@ -400,8 +402,29 @@ impl ClosedStmt {
                 params.func_returned = func_retuened;
                 params.if_level -= 1;
             }
-            ClosedStmt::NonIfStmt(non_if_stmt) => {
+            ClosedStmt::BasicStmt(non_if_stmt) => {
                 non_if_stmt.generate_koopa_ir(buf, params);
+            }
+            ClosedStmt::WhileStmt(cond, body) => {
+                params.while_idx += 1;
+                let while_idx = params.while_idx;
+                params.end_idx += 1;
+                writeln!(buf, "%while_entry{}:", while_idx).unwrap();
+                let res = cond.short_circuit_eval(buf, params);
+                match res {
+                    ExpResult::IntResult(int_num) => {
+                        writeln!(buf, "  br {}, %while_entry{}, %while_end{}", int_num, while_idx, while_idx)
+                            .unwrap();
+                    }
+                    ExpResult::RegCount(reg) => {
+                        writeln!(buf, "  br %{}, %while_entry{}, %while_end{}", reg - 1, while_idx, while_idx)
+                            .unwrap();
+                    }
+                }
+                writeln!(buf, "%while_body{}:", while_idx).unwrap();
+                body.generate_koopa_ir(buf, params);
+                writeln!(buf, "  jump %while_entry{}", while_idx).unwrap();
+                writeln!(buf, "%while_end{}:", params.while_idx).unwrap();
             }
         }
     }
@@ -495,6 +518,27 @@ impl OpenStmt {
                 params.func_returned = func_returned;
                 writeln!(buf, "%end{}:", end_idx).unwrap();
                 params.if_level -= 1;
+            }
+            OpenStmt::WhileStmt(cond, body) => {
+                params.while_idx += 1;
+                let while_idx = params.while_idx;
+                params.end_idx += 1;
+                writeln!(buf, "%while_entry{}:", while_idx).unwrap();
+                let res = cond.short_circuit_eval(buf, params);
+                match res {
+                    ExpResult::IntResult(int_num) => {
+                        writeln!(buf, "  br {}, %while_entry{}, %while_end{}", int_num, while_idx, while_idx)
+                            .unwrap();
+                    }
+                    ExpResult::RegCount(reg) => {
+                        writeln!(buf, "  br %{}, %while_entry{}, %while_end{}", reg - 1, while_idx, while_idx)
+                            .unwrap();
+                    }
+                }
+                writeln!(buf, "%while_body{}:", while_idx).unwrap();
+                body.generate_koopa_ir(buf, params);
+                writeln!(buf, "  jump %while_entry{}", while_idx).unwrap();
+                writeln!(buf, "%while_end{}:", params.while_idx).unwrap();
             }
         }
     }
@@ -984,7 +1028,11 @@ impl LAndExp {
         }
     }
 
-    pub fn short_circuit_eval(&self, buf: &mut Vec<u8>, params: &mut GenerateIRParams) -> ExpResult {
+    pub fn short_circuit_eval(
+        &self,
+        buf: &mut Vec<u8>,
+        params: &mut GenerateIRParams,
+    ) -> ExpResult {
         match self {
             LAndExp::EqExp(eq_exp) => {
                 return eq_exp.generate_koopa_ir(buf, params);
@@ -995,7 +1043,7 @@ impl LAndExp {
                 let jump_false_branch = params.jump_false_branch;
                 let jump_true_branch = params.jump_true_branch;
                 // and求值为假到下一个 || 的右边
-                
+
                 params.jump_true_branch = eval_idx; // 否则就求右边
                 let l_and_exp_res = l_and_exp.short_circuit_eval(buf, params);
 
@@ -1014,7 +1062,7 @@ impl LAndExp {
                     -1 => "then",
                     -2 => "else",
                     -3 => "end",
-                    _ => "short_circuit", 
+                    _ => "short_circuit",
                 };
                 let jump_false_idx = match params.jump_false_branch {
                     -1 => params.then_idx,
@@ -1027,7 +1075,7 @@ impl LAndExp {
                     -1 => "then",
                     -2 => "else",
                     -3 => "end",
-                    _ => "short_circuit", 
+                    _ => "short_circuit",
                 };
                 let jump_true_idx = match params.jump_true_branch {
                     -1 => params.then_idx,
@@ -1052,7 +1100,7 @@ impl LAndExp {
 
                 params.jump_false_branch = jump_false_branch;
                 params.jump_true_branch = jump_true_branch;
-                
+
                 let eq_exp_res = eq_exp.generate_koopa_ir(buf, params);
 
                 match eq_exp_res {
@@ -1181,7 +1229,7 @@ impl LOrExp {
                     -1 => "then",
                     -2 => "else",
                     -3 => "end",
-                    _ => "short_circuit", 
+                    _ => "short_circuit",
                 };
                 let jump_false_idx = match params.jump_false_branch {
                     -1 => params.then_idx,
@@ -1194,7 +1242,7 @@ impl LOrExp {
                     -1 => "then",
                     -2 => "else",
                     -3 => "end",
-                    _ => "short_circuit", 
+                    _ => "short_circuit",
                 };
                 let jump_true_idx = match params.jump_true_branch {
                     -1 => params.then_idx,
@@ -1219,7 +1267,7 @@ impl LOrExp {
 
                 params.jump_false_branch = jump_false_branch;
                 params.jump_true_branch = jump_true_branch;
-                
+
                 let l_and_exp_res = l_and_exp.short_circuit_eval(buf, params);
 
                 match l_and_exp_res {
