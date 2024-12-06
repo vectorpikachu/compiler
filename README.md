@@ -28,7 +28,7 @@ docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compil
 ```
 
 ```
-docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -koopa -s lv6 /root/compiler
+docker run -it --rm -v D:\HuaweiMoveData\Users\平面向皮卡丘\Desktop\compilers\compiler:/root/compiler maxxing/compiler-dev autotest -koopa -s lv7 /root/compiler
 ```
 
 ## Dangling-else 的解决方法

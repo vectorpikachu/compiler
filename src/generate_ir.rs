@@ -19,6 +19,7 @@ pub struct GenerateIRParams {
     pub jump_true_branch: i32, // 短路要跳转的地方
     pub jump_false_branch: i32,
     pub while_idx: i32,
+    pub while_level: i32,
 }
 
 #[derive(Clone)]
@@ -146,6 +147,7 @@ impl CompUnit {
             jump_false_branch: 0,
             jump_true_branch: 0,
             while_idx: 0,
+            while_level: 0,
         };
         self.func_def.generate_koopa_ir(buf, &mut params);
     }
@@ -343,6 +345,24 @@ impl BasicStmt {
             BasicStmt::Block(block) => {
                 block.generate_koopa_ir(buf, params);
             }
+            BasicStmt::Break => {
+                if params.while_level <= 0 {
+                    stderr()
+                        .write_all(b"Error: break statement not in loop\n")
+                        .unwrap();
+                    return;
+                }
+                writeln!(buf, "  jump %while_end{}", params.while_idx).unwrap();
+            }
+            BasicStmt::Continue => {
+                if params.while_level <= 0 {
+                    stderr()
+                        .write_all(b"Error: continue statement not in loop\n")
+                        .unwrap();
+                    return;
+                }
+                writeln!(buf, "  jump %while_entry{}", params.while_idx).unwrap();
+            }
         }
     }
 }
@@ -407,24 +427,33 @@ impl ClosedStmt {
             }
             ClosedStmt::WhileStmt(cond, body) => {
                 params.while_idx += 1;
+                params.while_level += 1;
                 let while_idx = params.while_idx;
-                params.end_idx += 1;
+                writeln!(buf, "  jump %while_entry{}", while_idx).unwrap();
                 writeln!(buf, "%while_entry{}:", while_idx).unwrap();
+                params.jump_true_branch = -4; // 是while_body
+                params.jump_false_branch = -5; // 是while_end
                 let res = cond.short_circuit_eval(buf, params);
                 match res {
                     ExpResult::IntResult(int_num) => {
-                        writeln!(buf, "  br {}, %while_entry{}, %while_end{}", int_num, while_idx, while_idx)
+                        writeln!(buf, "  br {}, %while_body{}, %while_end{}", int_num, while_idx, while_idx)
                             .unwrap();
                     }
                     ExpResult::RegCount(reg) => {
-                        writeln!(buf, "  br %{}, %while_entry{}, %while_end{}", reg - 1, while_idx, while_idx)
+                        writeln!(buf, "  br %{}, %while_body{}, %while_end{}", reg - 1, while_idx, while_idx)
                             .unwrap();
                     }
                 }
                 writeln!(buf, "%while_body{}:", while_idx).unwrap();
+                let func_returned = params.func_returned;
+                params.func_returned = false;
                 body.generate_koopa_ir(buf, params);
-                writeln!(buf, "  jump %while_entry{}", while_idx).unwrap();
-                writeln!(buf, "%while_end{}:", params.while_idx).unwrap();
+                if !params.func_returned {
+                    writeln!(buf, "  jump %while_entry{}", while_idx).unwrap();
+                }
+                params.func_returned = func_returned;
+                writeln!(buf, "%while_end{}:", while_idx).unwrap();
+                params.while_level -= 1;
             }
         }
     }
@@ -521,24 +550,33 @@ impl OpenStmt {
             }
             OpenStmt::WhileStmt(cond, body) => {
                 params.while_idx += 1;
+                params.while_level += 1;
                 let while_idx = params.while_idx;
-                params.end_idx += 1;
+                writeln!(buf, "  jump %while_entry{}", while_idx).unwrap();
                 writeln!(buf, "%while_entry{}:", while_idx).unwrap();
+                params.jump_true_branch = -4; // 是while_body
+                params.jump_false_branch = -5; // 是while_end
                 let res = cond.short_circuit_eval(buf, params);
                 match res {
                     ExpResult::IntResult(int_num) => {
-                        writeln!(buf, "  br {}, %while_entry{}, %while_end{}", int_num, while_idx, while_idx)
+                        writeln!(buf, "  br {}, %while_body{}, %while_end{}", int_num, while_idx, while_idx)
                             .unwrap();
                     }
                     ExpResult::RegCount(reg) => {
-                        writeln!(buf, "  br %{}, %while_entry{}, %while_end{}", reg - 1, while_idx, while_idx)
+                        writeln!(buf, "  br %{}, %while_body{}, %while_end{}", reg - 1, while_idx, while_idx)
                             .unwrap();
                     }
                 }
                 writeln!(buf, "%while_body{}:", while_idx).unwrap();
+                let func_returned = params.func_returned;
+                params.func_returned = false;
                 body.generate_koopa_ir(buf, params);
-                writeln!(buf, "  jump %while_entry{}", while_idx).unwrap();
-                writeln!(buf, "%while_end{}:", params.while_idx).unwrap();
+                if !params.func_returned {
+                    writeln!(buf, "  jump %while_entry{}", while_idx).unwrap();
+                }
+                writeln!(buf, "%while_end{}:", while_idx).unwrap();
+                params.func_returned = func_returned;
+                params.while_level -= 1;
             }
         }
     }
@@ -1062,12 +1100,16 @@ impl LAndExp {
                     -1 => "then",
                     -2 => "else",
                     -3 => "end",
+                    -4 => "while_body",
+                    -5 => "while_end",
                     _ => "short_circuit",
                 };
                 let jump_false_idx = match params.jump_false_branch {
                     -1 => params.then_idx,
                     -2 => params.else_idx,
                     -3 => params.end_idx,
+                    -4 => params.while_idx,
+                    -5 => params.while_idx,
                     idx => idx,
                 };
 
@@ -1075,12 +1117,16 @@ impl LAndExp {
                     -1 => "then",
                     -2 => "else",
                     -3 => "end",
+                    -4 => "while_body",
+                    -5 => "while_end",
                     _ => "short_circuit",
                 };
                 let jump_true_idx = match params.jump_true_branch {
                     -1 => params.then_idx,
                     -2 => params.else_idx,
                     -3 => params.end_idx,
+                    -4 => params.while_idx,
+                    -5 => params.while_idx,
                     idx => idx,
                 };
 
@@ -1229,12 +1275,16 @@ impl LOrExp {
                     -1 => "then",
                     -2 => "else",
                     -3 => "end",
+                    -4 => "while_body",
+                    -5 => "while_end",
                     _ => "short_circuit",
                 };
                 let jump_false_idx = match params.jump_false_branch {
                     -1 => params.then_idx,
                     -2 => params.else_idx,
                     -3 => params.end_idx,
+                    -4 => params.while_idx,
+                    -5 => params.while_idx,
                     idx => idx,
                 };
 
@@ -1242,12 +1292,16 @@ impl LOrExp {
                     -1 => "then",
                     -2 => "else",
                     -3 => "end",
+                    -4 => "while_body",
+                    -5 => "while_end",
                     _ => "short_circuit",
                 };
                 let jump_true_idx = match params.jump_true_branch {
                     -1 => params.then_idx,
                     -2 => params.else_idx,
                     -3 => params.end_idx,
+                    -4 => params.while_idx,
+                    -5 => params.while_idx,
                     idx => idx,
                 };
 

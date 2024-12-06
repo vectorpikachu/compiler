@@ -38,6 +38,8 @@ pub enum BasicStmt {
     Assgn(LVal, Exp),
     Exp(Option<Exp>),
     Block(Block),
+    Break,
+    Continue,
 }
 
 #[derive(Debug)]

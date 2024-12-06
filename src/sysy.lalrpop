@@ -60,6 +60,8 @@ BasicStmt: BasicStmt = {
   <block: Block> => BasicStmt::Block(block),
   ";" => BasicStmt::Exp(None),
   <exp: Exp> ";" => BasicStmt::Exp(Some(exp)),
+  "break" ";" => BasicStmt::Break,
+  "continue" ";" => BasicStmt::Continue,
 };
 
 
